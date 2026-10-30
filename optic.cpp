@@ -1,6 +1,6 @@
 /* optic.cpp */
 
-#include "./core/core.hpp"
+#include "core/core.hpp"
 
 int main(int argc, char *argv[]) {
     OpticCore optic_core;
