@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include "diagnostics_engine.hpp"
-#include "lexer/tokens.hpp"
+#include "compiler/driver/diagnostics_engine.hpp"
+#include "compiler/lexer/tokens.hpp"
 
 #include <string>
 #include <vector>

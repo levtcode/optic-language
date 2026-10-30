@@ -1,7 +1,7 @@
 /* core.cpp */
 
-#include "core.hpp"
-#include "../compiler/driver/compiler_instance.hpp"
+#include "core/core.hpp"
+#include "compiler/driver/compiler_instance.hpp"
 
 #include <cstdlib>
 

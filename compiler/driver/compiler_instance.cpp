@@ -1,10 +1,10 @@
 /* compiler_instance.cpp */
 
-#include "compiler_instance.hpp"
-#include "diagnostics_engine.hpp"
-#include "args.hpp"
-#include "preprocessor/preprocessor.hpp"
-#include "lexer/lexer.hpp"
+#include "compiler/driver/compiler_instance.hpp"
+#include "compiler/driver/diagnostics_engine.hpp"
+#include "compiler/driver/args.hpp"
+#include "compiler/preprocessor/preprocessor.hpp"
+#include "compiler/lexer/lexer.hpp"
 
 #include <cstddef>
 #include <cstdlib>

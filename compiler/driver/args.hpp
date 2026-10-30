@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "compiler_instance.hpp"
+#include "compiler/driver/compiler_instance.hpp"
 #include <string>
 
 namespace cli_tooling {

@@ -13,9 +13,9 @@
 
 #pragma once
 
-#include "../driver/diagnostics_engine.hpp"
-#include "../driver/module.hpp"
-#include "tokens.hpp"
+#include "compiler/driver/diagnostics_engine.hpp"
+#include "compiler/driver/module.hpp"
+#include "compiler/lexer/tokens.hpp"
 
 #include <vector>
 #include <string>

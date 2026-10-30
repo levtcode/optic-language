@@ -1,6 +1,6 @@
 /* diagnostic_engine.cpp */
 
-#include "diagnostics_engine.hpp"
+#include "compiler/driver/diagnostics_engine.hpp"
 
 #include <iostream>
 #include <format>

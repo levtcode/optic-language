@@ -1,6 +1,6 @@
 /* trie_operators.cpp */
 
-#include "trie_operators.hpp"
+#include "compiler/lexer/trie_operators.hpp"
 
 TrieNode *root = new TrieNode();
 

@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "tokens.hpp"
+#include "compiler/lexer/tokens.hpp"
 
 #include <unordered_map>
 #include <string>

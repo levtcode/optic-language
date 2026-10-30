@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include "diagnostics_engine.hpp"
-#include "module.hpp"
+#include "compiler/driver/diagnostics_engine.hpp"
+#include "compiler/driver/module.hpp"
 
 #include <vector>
 #include <unordered_map>

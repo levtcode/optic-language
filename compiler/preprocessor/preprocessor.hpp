@@ -3,8 +3,8 @@
 // TO REFACTORIZE
 
 #pragma once
-#include "driver/diagnostics_engine.hpp"
-#include "../driver/module.hpp"
+#include "compiler/driver/diagnostics_engine.hpp"
+#include "compiler/driver/module.hpp"
 
 #include <cstddef>
 #include <cstdint>

@@ -12,9 +12,9 @@
  * @todo Fill the '// Error' lines
  */
 
-#include "lexer.hpp"
-#include "tables.hpp"
-#include "trie_operators.hpp"
+#include "compiler/lexer/lexer.hpp"
+#include "compiler/lexer/tables.hpp"
+#include "compiler/lexer/trie_operators.hpp"
 
 inline bool is_octal(int c) noexcept { return (c >= '0' && c <= '7'); }
 
