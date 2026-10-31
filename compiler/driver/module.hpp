@@ -6,38 +6,62 @@
 #include "compiler/lexer/tokens.hpp"
 
 #include <string>
+#include <string_view>
 #include <vector>
-#include <filesystem>
 
-constexpr const char *optic_extension = ".optic";
+constexpr std::string_view OPTIC_EXTENSION = ".optic";
 
-/* */
+/// There is a semantic difference between an Optic's file and an Optic's module.
+
+/// Optic's file is just an IO buffer, but Optic's module is a conceptual object that represents
+/// an Optic's source code, with dependencies, source location and his buffer.
+
+
 class Module {
 private:
-    std::string          name;
-    std::string          path;
-    std::string          buffer;
-    SourceLocation       mod_loc;
+    std::string path;
+    std::string buffer;
     std::vector<token_t> tokens;
-
-    void name_module_format() noexcept {
-        std::filesystem::path __path__ = path;
-        name = __path__.filename();
-
-        auto pos = name.find_last_of('.');
-        if (pos != std::string::npos && name.ends_with(optic_extension)) {
-            name.erase(pos);
-        }
-    }
+    std::vector<std::string> dependencies;
+    SourceLocation mod_loc;
 
 public:
-    Module(const std::string &_path_) : path(_path_) { name_module_format(); mod_loc.file = path; }
+    explicit Module(std::string path)
+        : path(std::move(path)) {}
 
-    inline std::string get_name() const noexcept { return name; }
-    inline std::string get_path() const noexcept { return path; }
+    explicit Module(std::string path, SourceLocation loc)
+        : path(std::move(path)), mod_loc(std::move(loc)) {}
 
-    inline std::string          &get_buffer() noexcept { return buffer;  }
-    inline SourceLocation       &loc()        noexcept { return mod_loc; }
-    inline std::vector<token_t> &get_tokens() noexcept { return tokens;  }
-    // more methods here...
+    Module(const Module&) = delete;
+    Module& operator=(const Module&) = delete;
+
+    Module(Module&&) = delete;
+    Module& operator=(Module&&) = delete;
+
+    ~Module() = default;
+
+    std::string_view get_path() const noexcept {
+        return path;
+    }
+
+    std::string_view get_buffer() const noexcept {
+        return buffer;
+    }
+
+    const std::vector<token_t>& get_tokens() const noexcept {
+        return tokens;
+    }
+
+    const std::vector<std::string>&
+    get_dependencies() const noexcept {
+        return dependencies;
+    }
+
+    void set_buffer(std::string buffer) {
+        this->buffer = std::move(buffer);
+    }
+
+    void add_dependency(std::string dependency) {
+        dependencies.push_back(std::move(dependency));
+    }
 };

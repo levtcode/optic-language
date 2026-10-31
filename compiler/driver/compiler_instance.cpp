@@ -195,9 +195,9 @@ void CompilerInstance::cli_tooling(int argc, char **argv) noexcept {
 void CompilerInstance::lexing() noexcept {
     const SourceLocation srcloc(SourceKind::Stdin, "", "", 0, 0);
 
-#ifdef OPTIC_DEBUG
-    printf("\n----- PRINTING TOKENS -----\n\n");
-#endif
+    if (compiler_args.mode == CompilerMode::Debug) {
+        printf("\n----- PRINTING TOKENS -----\n\n");
+    }
 
     for (size_t i = 0; i < compiler_args.files.size(); i++) {
         std::string fname = compiler_args.files[i];
@@ -218,9 +218,9 @@ void CompilerInstance::lexing() noexcept {
         Lexer lexer(&module, &diagnostics_engine);
         lexer.tokenize(module.get_tokens());
 
-    #ifdef OPTIC_DEBUG
-        lexer.print_tokens(module);
-    #endif
+        if (compiler_args.mode == CompilerMode::Debug) {
+            lexer.print_tokens(module);
+        }
         modules.push_back(std::move(module));
     }
 }
