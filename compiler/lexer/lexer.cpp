@@ -403,8 +403,6 @@ void Lexer::tokenize(std::vector<token_t> &tokens) noexcept {
     TrieNode::destroy();
 }
 
-#ifdef OPTIC_DEBUG
-
 #include <iostream>
 
 /**
@@ -427,8 +425,6 @@ void Lexer::print_tokens(Module &module) noexcept {
         std::cout << "Token type: " << to_string_token(token.type) << "\n";
         std::cout << "Token value: '" << token.value << "'\n";
         std::cout << "At line: " << token.line << ", in column: " << token.column << "\n";
-        std::cout << "In file: " << module.get_name() << "\n\n";
+        std::cout << "In file: " << module.get_path() << "\n\n";
     }
 }
-
-#endif

@@ -1,56 +1,89 @@
 /* compiler_instance.cpp */
 
 #include "compiler/driver/compiler_instance.hpp"
-#include "compiler/driver/diagnostics_engine.hpp"
+
 #include "compiler/driver/args.hpp"
 #include "compiler/preprocessor/preprocessor.hpp"
 #include "compiler/lexer/lexer.hpp"
 
-#include <cstddef>
-#include <cstdlib>
-#include <cstring>
-#include <format>
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <format>
+#include <fstream>
+#include <iterator>
+#include <memory>
+#include <string>
+#include <utility>
 
 /* */
-bool get_data(const std::string fname, std::string &dest, DiagnosticsEngine &diagnostic_engine) noexcept {
-    const SourceLocation srcloc(SourceKind::Stdin, "", "", 0, 0);
-    FILE *f = fopen(fname.c_str(), "rb");
+bool get_data(const std::string fname, std::string& dest, DiagnosticsEngine& diagnostic_engine) noexcept {
+    const SourceLocation srcloc(
+        SourceKind::Stdin,
+        "",
+        "",
+        0,
+        0
+    );
 
-    if (!f) {
+    try {
+        std::ifstream file(fname, std::ios::binary);
+
+        if (!file) {
+            diagnostic_engine.report(
+                srcloc,
+                std::format(
+                    "Error: Cannot open file '{}'.\n",
+                    fname
+                ),
+                "Solution: Verify that the file exists and that "
+                "the compiler has permission to access it.\n",
+                "",
+                DiagnosticsLevel::Error
+            );
+
+            return false;
+        }
+
+        std::string buffer(
+            std::istreambuf_iterator<char>{file},
+            std::istreambuf_iterator<char>{}
+        );
+
+        if (file.bad()) {
+            diagnostic_engine.report(
+                srcloc,
+                std::format(
+                    "Error: Failed to read file '{}'.\n",
+                    fname
+                ),
+                "Solution: Verify that the file is accessible "
+                "and that no IO error occurred.\n",
+                "",
+                DiagnosticsLevel::Error
+            );
+
+            return false;
+        }
+
+        dest = std::move(buffer);
+
+        return true;
+    }
+    catch (...) {
         diagnostic_engine.report(
             srcloc,
-            std::format("Error: Cant open file '{}'. File does not exists.\n", fname),
-            "Solution: Check if the file exists on your system path, if doesnt, create the file yourself.\n",
-
-            "More information: This happens because the OS (Operating System) tries to access to the " \
-            "specified path, but the resource does not exists in that path. So, the OS returns a null pointer " \
-            "to that resource, causing it to be imposible to read or write in that resource.\n",
+            std::format(
+                "Error: An exception occurred while reading '{}'.\n",
+                fname
+            ),
+            "",
+            "",
             DiagnosticsLevel::Error
         );
-        fclose(f);
+
         return false;
     }
-
-    fseek(f, 0, SEEK_END);
-    size_t size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    dest.resize(size);
-    if ((fread(dest.data(), 1, size, f) != size) && ferror(f)) {
-        diagnostic_engine.report(
-            srcloc,
-            std::format("Error: Failed to read file '{}', IO error.\n", fname),
-            "Solution: Verify if your file contains a valid encode format (UTF-8 for example) and is not a binary file.\n",
-            "More information: ...",
-            DiagnosticsLevel::Error
-        );
-        fclose(f);
-        return false;
-    }
-
-    fclose(f);
-    return true;
 }
 
 void CompilerInstance::call_usage(bool help_manual) noexcept {
@@ -78,150 +111,266 @@ void CompilerInstance::call_usage(bool help_manual) noexcept {
 
 // %==========% Compiler Interface %==========%
 
-inline void CompilerInstance::set_mode(const CompilerMode mode) {
-    compiler_args.mode = mode;
+void CompilerInstance::set_mode(
+    const CompilerMode mode
+) {
+    compiler_context.config().mode = mode;
 }
 
-inline void CompilerInstance::add_file(const std::string file) {
-    if (std::find(compiler_args.files.begin(), compiler_args.files.end(), file) == compiler_args.files.end()) {
-        compiler_args.files.push_back(file);
+void CompilerInstance::add_file(
+    const std::string file
+) {
+    auto& files = compiler_context.config().input_files;
+
+    if (std::find(
+        files.begin(),
+        files.end(),
+        file
+    ) == files.end()) {
+        files.push_back(file);
     }
 }
 
-void CompilerInstance::set_option(const std::string option_name, const ArgValue value) {
-    (void) option_name;
-    (void) value;
+void CompilerInstance::set_option(
+    const std::string option_name,
+    const ArgValue value
+) {
+    compiler_context.config().set_option(
+        option_name,
+        value
+    );
 }
 
-void CompilerInstance::set_flag(const std::string flag_name, const bool val) {
-    (void) flag_name;
-    (void) val;
+void CompilerInstance::set_flag(
+    const std::string flag_name,
+    const bool val
+) {
+    compiler_context.config().set_flag(
+        flag_name,
+        val
+    );
 }
 
-int CompilerInstance::get_flag_value(const std::string flag_name) {
-    (void) flag_name;
-    return -1;
+int CompilerInstance::get_flag_value(
+    const std::string& flag_name
+) const {
+    const auto& flags = compiler_context.config().flags;
+
+    const auto it = flags.find(flag_name);
+
+    if (it == flags.end()) {
+        return -1;
+    }
+
+    return it->second ? 1 : 0;
 }
 
-inline CompilerMode CompilerInstance::get_compiler_mode() {
-    return compiler_args.mode;
+CompilerMode CompilerInstance::get_compiler_mode() const {
+    return compiler_context.config().mode;
 }
 
-ArgValue CompilerInstance::get_option_value(const std::string option_name) {
-    (void) option_name;
-    return -1;
-}
+std::optional<ArgValue> CompilerInstance::get_option_value(
+    const std::string& option_name
+) const {
+    const ArgValue* value =
+        compiler_context.config().get_option(option_name);
 
-inline std::vector<Module> CompilerInstance::get_files() {
-    return modules;
+    if (!value) {
+        return std::nullopt;
+    }
+
+    return *value;
 }
 
 
 // %==========% Compiler Phases %==========%
 
 /* */
-void CompilerInstance::cli_tooling(int argc, char **argv) noexcept {
-    // TODO: Print args if debug mode, refactor std::visit lambda to allow local use and improve report messages.
+void CompilerInstance::cli_tooling(int argc, char** argv) noexcept {
+    auto& config = compiler_context.config();
+    auto& diagnostics = compiler_context.diagnostics();
 
-    SourceLocation srcloc(SourceKind::Stdin, "", "", 0, 0);
-    std::string tmp[2] = {""};
+    const SourceLocation srcloc(
+        SourceKind::Stdin,
+        "",
+        "",
+        0,
+        0
+    );
 
-    for (int i = 0; i < argc; i++) {
-        size_t index;
-        int match = cli_tooling::match_compiler_arg(argv[i], &index);
+    std::string unknown_type;
+    std::string unknown_name;
 
+    for (int i = 0; i < argc; ++i) {
+        const std::string_view arg(argv[i]);
+
+        std::size_t index = std::string::npos;
+
+        const int match =
+            cli_tooling::match_compiler_arg(arg, &index);
+
+        // Source file.
         if (match == -1) {
-            add_file(argv[i]);
+            add_file(std::string(arg));
+            continue;
         }
 
-        else if (match == 1) {
-            ArgValue val = cli_tooling::parse_value(argv[i], &index);
+        // Option with a value.
+        if (match == 1) {
+            const ArgValue value =
+                cli_tooling::parse_value(arg, &index);
 
             if (index == std::string::npos) {
-                diagnostics_engine.report(
+                diagnostics.report(
                     srcloc,
-                    std::format("Error: Couldnt parse option value, value type is empty or not supported.\n"),
+                    "Error: Could not parse compiler option value.\n",
                     "",
-                    "More information: The compiler cli tooling expects a valid value type. Valid value types are: int, double, bool, string.\n",
+                    "Supported value types: int, double, bool and string.\n",
                     DiagnosticsLevel::Error
                 );
-                stop();
+
+                continue;
             }
 
-            std::string option_name = std::string(argv[i]).substr(0, index);
+            const std::string option_name(
+                arg.substr(0, index)
+            );
 
-            if (!compiler_args.options.contains(option_name)) {
-                tmp[0] = "option"; tmp[1] = option_name;
+            const auto it = config.options.find(option_name);
+
+            if (it == config.options.end()) {
+                unknown_type = "option";
+                unknown_name = option_name;
                 break;
             }
 
-            if (!cli_tooling::same_arg_type(compiler_args.options[option_name], val)) {
-                diagnostics_engine.report(
+            if (!cli_tooling::same_arg_type(
+                it->second,
+                value
+            )) {
+                diagnostics.report(
                     srcloc,
-                    std::format("Error: Option value type dont match compiler type. There is a types conflict.\n"),
+                    std::format(
+                        "Error: Type mismatch for option '{}'.\n",
+                        option_name
+                    ),
                     "",
-                    "",
+                    "The provided value does not match the "
+                    "option's declared type.\n",
                     DiagnosticsLevel::Error
                 );
-                stop();
-            }
-        }
 
-        else {
-            std::string flag_name = std::string(argv[i]).substr(0, index);
-            
-            if (!compiler_args.flags.contains(flag_name)) {
-                tmp[0] = "flag"; tmp[1] = flag_name;
-                break;
+                continue;
             }
 
-            compiler_args.flags[flag_name] = !compiler_args.flags[flag_name];
+            config.set_option(option_name, value);
+
+            continue;
         }
+
+        // Compiler flag.
+        const std::string flag_name(
+            arg.substr(0, index)
+        );
+
+        const auto it = config.flags.find(flag_name);
+
+        if (it == config.flags.end()) {
+            unknown_type = "flag";
+            unknown_name = flag_name;
+            break;
+        }
+
+        it->second = !it->second;
     }
 
-    if (!tmp[0].empty()) {
-        diagnostics_engine.report(srcloc,
-            std::format("Error: {} name '{}' does not exists. Couldnt apply any changes. See a list of supported {}s.\n", tmp[0], tmp[1], tmp[0]),
+    if (!unknown_type.empty()) {
+        diagnostics.report(
+            srcloc,
+            std::format(
+                "Error: Unknown {} '{}'.\n",
+                unknown_type,
+                unknown_name
+            ),
             "",
             "",
             DiagnosticsLevel::Error
         );
+
         call_usage();
-        stop();
     }
 }
 
 /* */
 void CompilerInstance::lexing() noexcept {
-    const SourceLocation srcloc(SourceKind::Stdin, "", "", 0, 0);
+    auto& config       = compiler_context.config();
+    auto& diagnostics  = compiler_context.diagnostics();
+    auto& module_graph = compiler_context.modules();
 
-    if (compiler_args.mode == CompilerMode::Debug) {
-        printf("\n----- PRINTING TOKENS -----\n\n");
+    const SourceLocation srcloc(
+        SourceKind::Stdin,
+        "",
+        "",
+        0,
+        0
+    );
+
+    if (config.mode == CompilerMode::Debug) {
+        std::printf(
+            "\n----- PRINTING TOKENS -----\n\n"
+        );
     }
 
-    for (size_t i = 0; i < compiler_args.files.size(); i++) {
-        std::string fname = compiler_args.files[i];
+    for (const std::string& fname : config.input_files) {
 
-        if (!fname.ends_with(optic_extension)) {
-            diagnostics_engine.report(srcloc,
-                std::format("Error: File '{}' is not a Optic file '{}', cant be processed.\n", fname, optic_extension),
+        if (!fname.ends_with(OPTIC_EXTENSION)) {
+            diagnostics.report(
+                srcloc,
+                std::format(
+                    "Error: '{}' is not a valid Optic source file.\n",
+                    fname
+                ),
+                std::format(
+                    "Solution: Optic source files must use '{}'.\n",
+                    OPTIC_EXTENSION
+                ),
+                "",
+                DiagnosticsLevel::Error
+            );
+
+            continue;
+        }
+
+        try {
+            auto module = std::make_unique<Module>(fname);
+            std::string buffer;
+
+            if (!get_data(fname, buffer, diagnostics)) continue;
+
+            module->set_buffer(std::move(buffer));
+
+            Lexer lexer(module.get(), &diagnostics);
+
+            lexer.tokenize(module->get_tokens());
+
+            if (config.mode == CompilerMode::Debug) {
+                lexer.print_tokens(*module);
+            }
+
+            module_graph.add_module(std::move(module));
+        }
+        catch (...) {
+            diagnostics.report(
+                srcloc,
+                std::format(
+                    "Error: Failed to process module '{}'.\n",
+                    fname
+                ),
                 "",
                 "",
                 DiagnosticsLevel::Error
             );
-            continue;
         }
-
-        Module module(fname);
-        if (!get_data(fname, module.get_buffer(), diagnostics_engine)) continue;
-
-        Lexer lexer(&module, &diagnostics_engine);
-        lexer.tokenize(module.get_tokens());
-
-        if (compiler_args.mode == CompilerMode::Debug) {
-            lexer.print_tokens(module);
-        }
-        modules.push_back(std::move(module));
     }
 }
 
@@ -259,7 +408,7 @@ void CompilerInstance::code_generation() noexcept {
 /* */
 [[noreturn]]
 void CompilerInstance::stop(bool generate_core_dump) noexcept {
-    diagnostics_engine.show_all();
+    compiler_context.diagnostics().show_all();
     if (generate_core_dump)
         abort();
     else
@@ -269,6 +418,8 @@ void CompilerInstance::stop(bool generate_core_dump) noexcept {
 /* */
 [[nodiscard]]
 int CompilerInstance::run(int argc, char *argv[], CompilerMode mode) noexcept {
+    auto& diagnostics = compiler_context.diagnostics();
+
     set_mode(mode);
 
     cli_tooling(--argc, ++argv);
@@ -280,6 +431,11 @@ int CompilerInstance::run(int argc, char *argv[], CompilerMode mode) noexcept {
     linking();
     code_generation();
 
-    diagnostics_engine.get_config().guide_engine ? diagnostics_engine.run_guide_engine() : diagnostics_engine.show_all();
-    return (diagnostics_engine.has_errors()) ? EXIT_FAILURE : EXIT_SUCCESS;
+    if (diagnostics.get_config().guide_engine) {
+        diagnostics.run_guide_engine();
+    } else {
+        diagnostics.show_all();
+    }
+
+    return diagnostics.has_errors() ? EXIT_FAILURE : EXIT_SUCCESS;
 }

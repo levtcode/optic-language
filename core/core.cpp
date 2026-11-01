@@ -66,7 +66,7 @@ OpticCore::Command OpticCore::get_command(const char *current_arg) {
 }
 
 /* */
-int OpticCore::run(int argc, char *argv[]) {
+int OpticCore::start_core(int argc, char *argv[]) {
     Command main_command = get_command(argv[0]);
 
     if (main_command == Command::Unknown) {

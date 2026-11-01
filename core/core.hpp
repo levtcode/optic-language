@@ -31,8 +31,8 @@ private:
     };
 
     Command get_command(const char *current_arg);
-    int dispatch_command(Command, int argc, char **);
+    int     dispatch_command(Command, int argc, char **);
 
 public:
-    [[nodiscard]] int run(int argc, char *argv[]);
+    [[nodiscard]] int start_core(int argc, char *argv[]);
 };

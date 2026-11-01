@@ -53,13 +53,13 @@ void cli_tooling::print_args_flags(std::unordered_map<std::string, bool> &flags)
 }
 
 /* */
-void cli_tooling::print_args(CompilerArgs &args) {
+void cli_tooling::print_args(CompilerConfig &config) {
     using namespace cli_tooling;
 
     std::cout << "----- PRINTING COMPILER ARGUMENTS -----\n\n";
-    print_args_files(args.files);
-    print_args_options(args.options);
-    print_args_flags(args.flags);
+    print_args_files  (config.input_files);
+    print_args_options(config.options);
+    print_args_flags  (config.flags);
 }
 
 int cli_tooling::match_compiler_arg(const std::string_view &arg, size_t *index) {

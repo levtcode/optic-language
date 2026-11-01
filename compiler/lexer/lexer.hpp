@@ -22,7 +22,7 @@
 
 class Lexer {
 private:
-    Module *module;
+    Module            *module;
     DiagnosticsEngine *diagnostic_engine;
 
     /// Current position within the module's source buffer.
@@ -69,11 +69,7 @@ public:
     /// Main lexer entry point. Performs lexical analysis over the source module 
     /// and generates the complete token stream.
     void tokenize(std::vector<token_t> &tokens) noexcept;
-#ifdef OPTIC_DEBUG
     void print_tokens(Module&) noexcept;
-#endif
 };
 
-#ifdef OPTIC_DEBUG
 const char *to_string_token(TokenType type);
-#endif

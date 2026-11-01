@@ -5,11 +5,19 @@
 #include "compiler/driver/diagnostics_engine.hpp"
 #include "compiler/lexer/tokens.hpp"
 
+#include <cstdint>
+#include <filesystem>
+#include <memory>
 #include <string>
 #include <string_view>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
-constexpr std::string_view OPTIC_EXTENSION = ".optic";
+using ModuleID = std::uint32_t;
+
+constexpr        std::string_view OPTIC_EXTENSION = ".optic";
+inline constexpr ModuleID invalid_module_id = 0;
 
 /// There is a semantic difference between an Optic's file and an Optic's module.
 
@@ -19,18 +27,15 @@ constexpr std::string_view OPTIC_EXTENSION = ".optic";
 
 class Module {
 private:
-    std::string path;
-    std::string buffer;
-    std::vector<token_t> tokens;
-    std::vector<std::string> dependencies;
-    SourceLocation mod_loc;
+    std::filesystem::path path;
+    std::string           buffer;
+    SourceLocation        module_location;
+    std::vector<token_t>  tokens;
+    std::vector<ModuleID> dependencies;
 
 public:
     explicit Module(std::string path)
         : path(std::move(path)) {}
-
-    explicit Module(std::string path, SourceLocation loc)
-        : path(std::move(path)), mod_loc(std::move(loc)) {}
 
     Module(const Module&) = delete;
     Module& operator=(const Module&) = delete;
@@ -40,19 +45,31 @@ public:
 
     ~Module() = default;
 
-    std::string_view get_path() const noexcept {
-        return path;
+    std::string get_path() const noexcept {
+        return path.generic_string();
     }
 
     std::string_view get_buffer() const noexcept {
         return buffer;
     }
 
+    SourceLocation& loc() noexcept {
+        return module_location;
+    }
+
+    const SourceLocation& loc() const noexcept {
+        return module_location;
+    }
+
+    std::vector<token_t>& get_tokens() noexcept {
+        return tokens;
+    }
+
     const std::vector<token_t>& get_tokens() const noexcept {
         return tokens;
     }
 
-    const std::vector<std::string>&
+    const std::vector<ModuleID>&
     get_dependencies() const noexcept {
         return dependencies;
     }
@@ -61,7 +78,33 @@ public:
         this->buffer = std::move(buffer);
     }
 
-    void add_dependency(std::string dependency) {
+    void add_dependency(const ModuleID &dependency) {
         dependencies.push_back(std::move(dependency));
     }
+};
+
+class ModuleGraph {
+public:
+    ModuleID add_module(std::unique_ptr<Module> module);
+
+    [[nodiscard]]
+    Module* get_module(ModuleID id) noexcept;
+
+    bool add_dependency(ModuleID module, ModuleID dependency);
+
+    [[nodiscard]]
+    const std::vector<ModuleID>&
+    compilation_order() const noexcept {
+        return ordered_modules;
+    }
+
+    [[nodiscard]]
+    std::size_t size() const noexcept {
+        return modules.size();
+    }
+
+private:
+    std::unordered_map<ModuleID, std::unique_ptr<Module>> modules;
+    std::vector<ModuleID> ordered_modules;
+    ModuleID next_id = 1;
 };
