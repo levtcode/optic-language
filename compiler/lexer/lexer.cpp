@@ -276,7 +276,7 @@ token_t Lexer::read_operator() noexcept {
         if (!TrieNode::is_prefix(current, operator_table))
             break;
 
-        if (TrieNode::search(current))
+        if (TrieNode::search(current, trie_root))
             longest_match = current;
     }
 
@@ -329,7 +329,7 @@ void Lexer::ignore_comment() noexcept {
  * @note This function constitutes the main entry point of the lexer.
  */
 void Lexer::tokenize(std::vector<token_t> &tokens) noexcept {
-    TrieNode::init(operator_table);
+    trie_root = TrieNode::init(operator_table);
     int c;
 
     while ((c = get()) != EOF) {
@@ -400,7 +400,7 @@ void Lexer::tokenize(std::vector<token_t> &tokens) noexcept {
     }
 
     tokens.emplace_back(TokenType::EndOfFile, "EOF", module->loc().line, module->loc().column);
-    TrieNode::destroy();
+    TrieNode::destroy(trie_root);
 }
 
 #include <iostream>

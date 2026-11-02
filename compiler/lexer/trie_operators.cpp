@@ -2,10 +2,8 @@
 
 #include "compiler/lexer/trie_operators.hpp"
 
-TrieNode *root = new TrieNode();
-
 /* */
-void TrieNode::insert(const std::string &operator_) noexcept {
+void TrieNode::insert(const std::string &operator_, TrieNode *root) noexcept {
     TrieNode *current = root;
     
     for (auto op : operator_) {
@@ -19,7 +17,7 @@ void TrieNode::insert(const std::string &operator_) noexcept {
 }
 
 /* */
-bool TrieNode::search(const std::string &operator_) noexcept {
+bool TrieNode::search(const std::string &operator_, TrieNode *root) noexcept {
     TrieNode *current = root;
 
     for (auto op : operator_) {
@@ -39,10 +37,14 @@ bool TrieNode::is_prefix(const std::string &s, const std::unordered_map<std::str
 }
 
 /* */
-void TrieNode::init(const std::unordered_map<std::string_view, TokenType> &table) noexcept {
+TrieNode* TrieNode::init(const std::unordered_map<std::string_view, TokenType> &table) noexcept {
+    TrieNode *root = new TrieNode();
+
     for (auto it = table.begin(); it != table.end(); it++) {
-        root->insert(std::string(it->first));
+        root->insert(std::string(it->first), root);
     }
+
+    return root;
 }
 
 /* */
@@ -55,6 +57,6 @@ void recursive_destroy(TrieNode *node) noexcept {
 }
 
 /* */
-void TrieNode::destroy() noexcept {
+void TrieNode::destroy(TrieNode *root) noexcept {
     recursive_destroy(root);
 }

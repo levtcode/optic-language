@@ -16,6 +16,7 @@
 #include "compiler/driver/diagnostics_engine.hpp"
 #include "compiler/driver/module.hpp"
 #include "compiler/lexer/tokens.hpp"
+#include "trie_operators.hpp"
 
 #include <vector>
 #include <string>
@@ -24,6 +25,7 @@ class Lexer {
 private:
     Module            *module;
     DiagnosticsEngine *diagnostic_engine;
+    TrieNode          *trie_root;
 
     /// Current position within the module's source buffer.
     size_t pos = 0;
