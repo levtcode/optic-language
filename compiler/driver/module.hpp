@@ -1,10 +1,14 @@
-/* module.hpp */
+/**
+ * @file module.hpp
+ * @brief Source modules and their dependency graph.
+ *
+ * C++ declarations and definitions belong to namespace optic.
+ */
 
 #pragma once
 
 #include "compiler/driver/diagnostics_engine.hpp"
 #include "compiler/lexer/tokens.hpp"
-
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -13,6 +17,8 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
+namespace optic {
 
 using ModuleID = std::uint32_t;
 
@@ -108,3 +114,5 @@ private:
     std::vector<ModuleID> ordered_modules;
     ModuleID next_id = 1;
 };
+
+} // namespace optic

@@ -1,4 +1,9 @@
-/* diagnostic_engine.hpp */
+/**
+ * @file diagnostics_engine.hpp
+ * @brief Source diagnostics, severity reporting and diagnostic presentation.
+ *
+ * C++ declarations and definitions belong to namespace optic.
+ */
 
 // MORE LATER: Create DiagnosticRange or similar, to measure the distance between 2 SourceLocation instances
 // MORE LATER: Fix the format_msg() logic. Make that print renders '^~~~~'
@@ -7,6 +12,8 @@
 
 #include <string>
 #include <vector>
+
+namespace optic {
 
 /* */
 enum class DiagnosticsLevel {
@@ -94,7 +101,10 @@ public:
     inline bool has_errors()     const noexcept { return errors_num > 0; }
 
     DiagnosticsConfig get_config() const noexcept { return config; }
+    void set_config(DiagnosticsConfig value) noexcept { config = value; }
     std::string       format_msg(const std::string &msg, const std::string &buffer_view,
                                  const unsigned ln, const unsigned col,
                                  const std::string &pointer) noexcept;
 };
+
+} // namespace optic

@@ -1,107 +1,55 @@
+# Build the CLI independently from the compiler; neither target embeds the other.
+# opticc owns the frontend sources. Keep backend/runtime additions in their components.
 cmake_minimum_required(VERSION 3.20)
-
-project(
-    Optic
-    VERSION 0.1.0
-    LANGUAGES C CXX
-)
-
-# ==========================================
-# Global configuration
-# ==========================================
+project(Optic VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# ==========================================
-# Source files
-# ==========================================
-
-# Future extensions:
-# Use CmakeLists.txt in subdirectories like: compiler/CmakeLists.txt, core/CmakeLists.txt, etc.
-# Then, will use `add_subdirectory()` to append CmakeLists.txt files to the Cmake config.
-
-file(GLOB_RECURSE OPTIC_COMPILER_SOURCES
-    CONFIGURE_DEPENDS
-    "${PROJECT_SOURCE_DIR}/compiler/*.cpp"
-    "${PROJECT_SOURCE_DIR}/core/*.cpp"
-)
-
-list(APPEND OPTIC_COMPILER_SOURCES
-    "${PROJECT_SOURCE_DIR}/optic.cpp"
-)
-
-file(GLOB_RECURSE OPTIC_COMPILER_HEADERS
-    CONFIGURE_DEPENDS
-    "${PROJECT_SOURCE_DIR}/compiler/*.hpp"
-    "${PROJECT_SOURCE_DIR}/core/*.hpp"
-)
-
-# ==========================================
-# Executable
-# ==========================================
-
-add_executable(optic
-    ${OPTIC_COMPILER_SOURCES}
-    ${OPTIC_COMPILER_HEADERS}
-)
-
-# ==========================================
-# Include directories
-# ==========================================
-
-target_include_directories(optic
-    PRIVATE
-        "${PROJECT_SOURCE_DIR}"
-        "${PROJECT_SOURCE_DIR}/c_compat/headers"
-)
-
-# ==========================================
-# Compile definitions
-# ==========================================
-
-target_compile_definitions(optic
-    PRIVATE
+function(optic_configure_target target)
+    target_include_directories(${target} PRIVATE "${PROJECT_SOURCE_DIR}")
+    target_compile_definitions(${target} PRIVATE
         OPTIC_VERSION="${PROJECT_VERSION}"
         $<$<CONFIG:Debug>:OPTIC_DEBUG>
-)
-
-if(MSVC)
-    target_compile_definitions(optic PRIVATE _CRT_SECURE_NO_WARNINGS)
-endif()
-
-# ==========================================
-# Compiler options
-# ==========================================
-
-if(MSVC)
-    target_compile_options(optic
-        PRIVATE
-            /W4
-            /permissive-
-            $<$<CONFIG:Debug>:/Od>
-            $<$<CONFIG:Debug>:/Zi>
-            $<$<CONFIG:Release>:/O2>
     )
-else()
-    target_compile_options(optic
-        PRIVATE
-            -Wall
-            -Wextra
-            -Wpedantic
-            $<$<CONFIG:Debug>:-O0>
-            $<$<CONFIG:Debug>:-g>
-            $<$<CONFIG:Release>:-O3>
-    )
-endif()
+    if(MSVC)
+        target_compile_definitions(${target} PRIVATE _CRT_SECURE_NO_WARNINGS)
+        target_compile_options(${target} PRIVATE /W4 /permissive-)
+    else()
+        target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+endfunction()
 
-# ==========================================
-# Installation
-# ==========================================
+add_executable(optic optic.cpp cli/cli_tool.cpp cli/process.cpp)
+optic_configure_target(optic)
 
-install(TARGETS optic
-    RUNTIME DESTINATION bin
+add_executable(opticc
+    compiler/opticc.cpp
+    compiler/driver/args.cpp
+    compiler/driver/compiler_instance.cpp
+    compiler/driver/diagnostics_engine.cpp
+    compiler/driver/module.cpp
+    compiler/lexer/lexer.cpp
+    compiler/lexer/trie_operators.cpp
+    compiler/preprocessor/preprocessor.cpp
 )
+optic_configure_target(opticc)
+target_include_directories(opticc PRIVATE "${PROJECT_SOURCE_DIR}/c_compat/headers")
+
+install(TARGETS optic opticc RUNTIME DESTINATION bin)
+
+# Optional Python integration checks exercise real process/argument boundaries.
+include(CTest)
+if(BUILD_TESTING)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_executable(optic_test_component tests/cli_component.cpp)
+        add_test(NAME cli_integration COMMAND "${Python3_EXECUTABLE}"
+            "${PROJECT_SOURCE_DIR}/tests/cli_integration.py"
+            "$<TARGET_FILE:optic>" "$<TARGET_FILE:opticc>"
+            "$<TARGET_FILE:optic_test_component>")
+        set_tests_properties(cli_integration PROPERTIES TIMEOUT 30)
+    endif()
+endif()

@@ -1,11 +1,14 @@
-/* compiler_instance.cpp */
+/**
+ * @file compiler_instance.cpp
+ * @brief Compiler configuration and frontend phase coordination.
+ *
+ * C++ declarations and definitions belong to namespace optic.
+ */
 
 #include "compiler/driver/compiler_instance.hpp"
-
 #include "compiler/driver/args.hpp"
 #include "compiler/preprocessor/preprocessor.hpp"
 #include "compiler/lexer/lexer.hpp"
-
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -15,6 +18,8 @@
 #include <memory>
 #include <string>
 #include <utility>
+
+namespace optic {
 
 /* */
 bool get_data(const std::string fname, std::string& dest, DiagnosticsEngine& diagnostic_engine) noexcept {
@@ -87,25 +92,19 @@ bool get_data(const std::string fname, std::string& dest, DiagnosticsEngine& dia
 }
 
 void CompilerInstance::call_usage(bool help_manual) noexcept {
-    printf(
-        "Usage:\n" \
-        "Main arguments\n"
-        "\thelp\t\tShow a help user manual.\n" \
-        "\ttest\t\tRun a dedicated module to test the optic's compiler.\n" \
-        "\tinstall\t\tInstall an optic package.\n" \
-        "\tuninstall\tUninstall an optic package.\n" \
-        "\tbuild\t\tCompile and build an executable binary file.\n" \
-        "\trun\t\tCompile and run on the runtime engine the optic's source code file.\n"
-        "\tdebug\t\tCompile and build the optic's source code file showing the compiler's objects.\n\n" \
-
-        "Compiler flags\n" \
-        "...\n\n"
-        // TODO
+    (void)help_manual;
+    std::printf(
+        "Usage: opticc <build|run|debug> [options] <files.optic>\n\n"
+        "  build    Analyze sources; native code generation is not implemented.\n"
+        "  run      Analyze sources; bytecode generation/runtime are not implemented.\n"
+        "  debug    Print compiler configuration and tokens (frontend inspection).\n\n"
+        "  --color-diagnostics=auto|enable|disable\n"
+        "  -Wall    Enable all warnings in diagnostic configuration.\n"
+        "  -g       Record the debug-information flag (backend pending).\n"
+        "  --       Treat remaining arguments as source filenames.\n"
+        "  --help, -h    Show this help.\n"
+        "  --version     Show compiler version.\n"
     );
-
-    if (help_manual) {
-        // TODO
-    }
 }
 
 
@@ -201,9 +200,22 @@ void CompilerInstance::cli_tooling(int argc, char** argv) noexcept {
     std::string unknown_type;
     std::string unknown_name;
 
+    bool files_only = false;
     for (int i = 0; i < argc; ++i) {
         const std::string_view arg(argv[i]);
 
+        if (!files_only && arg == "--") {
+            files_only = true;
+            continue;
+        }
+        if (arg.empty()) {
+            diagnostics.report(srcloc, "Error: Empty compiler argument.\n", "", "", DiagnosticsLevel::Error);
+            continue;
+        }
+        if (files_only) {
+            add_file(std::string(arg));
+            continue;
+        }
         std::size_t index = std::string::npos;
 
         const int match =
@@ -281,7 +293,7 @@ void CompilerInstance::cli_tooling(int argc, char** argv) noexcept {
             break;
         }
 
-        it->second = !it->second;
+        it->second = true;
     }
 
     if (!unknown_type.empty()) {
@@ -422,7 +434,26 @@ int CompilerInstance::run(int argc, char *argv[], CompilerMode mode) noexcept {
 
     set_mode(mode);
 
-    cli_tooling(--argc, ++argv);
+    cli_tooling(argc, argv);
+    if (compiler_context.config().input_files.empty()) {
+        diagnostics.report(SourceLocation{}, "Error: No input files.\n", "", "", DiagnosticsLevel::Error);
+    }
+    if (diagnostics.has_errors()) {
+        diagnostics.show_all();
+        return EXIT_FAILURE;
+    }
+    auto diagnostic_config = diagnostics.get_config();
+    diagnostic_config.all_warnings = compiler_context.config().has_flag("-Wall");
+    const auto color = std::get<std::string>(compiler_context.config().options.at("--color-diagnostics"));
+    if (color != "auto" && color != "enable" && color != "disable") {
+        std::fprintf(stderr, "opticc: --color-diagnostics expects auto, enable or disable.\n");
+        return EXIT_FAILURE;
+    }
+    diagnostic_config.color_diagnostics = color != "disable";
+    diagnostics.set_config(diagnostic_config);
+    if (mode == CompilerMode::Debug) {
+        optic::cli_tooling::print_args(compiler_context.config());
+    }
     lexing();
     preprocess();
     parsing();
@@ -437,5 +468,14 @@ int CompilerInstance::run(int argc, char *argv[], CompilerMode mode) noexcept {
         diagnostics.show_all();
     }
 
-    return diagnostics.has_errors() ? EXIT_FAILURE : EXIT_SUCCESS;
+    if (diagnostics.has_errors()) return EXIT_FAILURE;
+    if (mode != CompilerMode::Debug) {
+        std::fprintf(stderr,
+            "opticc: %s is not implemented; frontend analysis completed, but no artifact was generated.\n",
+            mode == CompilerMode::Run ? "bytecode generation and execution" : "native code generation");
+        return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
 }
+
+} // namespace optic

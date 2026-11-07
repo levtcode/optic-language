@@ -1,8 +1,15 @@
-/* tokens.hpp */
+/**
+ * @file tokens.hpp
+ * @brief Token kinds and source-positioned lexical tokens.
+ *
+ * C++ declarations and definitions belong to namespace optic.
+ */
 
 #pragma once
 
 #include <string>
+
+namespace optic {
 
 enum class TokenType {
     // Types
@@ -127,3 +134,5 @@ struct token_t {
     token_t(const TokenType typ, const std::string &val, const unsigned ln, const unsigned col) : 
     type(typ), value(val), line(ln), column(col) {}
 };
+
+} // namespace optic

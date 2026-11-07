@@ -1,11 +1,16 @@
-/* args.cpp */
+/**
+ * @file args.cpp
+ * @brief Compiler argument inspection and typed option parsing.
+ *
+ * C++ declarations and definitions belong to namespace optic.
+ */
 
 #include "compiler/driver/args.hpp"
-
 #include <iostream>
 #include <charconv>
 
-const SourceLocation loc(SourceKind::Stdin, "", "", 0, 0);
+namespace optic {
+
 
 /* */
 void cli_tooling::print_args_files(std::vector<std::string> &files) {
@@ -63,7 +68,7 @@ void cli_tooling::print_args(CompilerConfig &config) {
 }
 
 int cli_tooling::match_compiler_arg(const std::string_view &arg, size_t *index) {
-    if (arg[0] != '-') return -1;
+    if (arg.empty() || arg[0] != '-') return -1;
 
     size_t i = 0;
     while (i < arg.size() && arg[i] != '=') i++;
@@ -83,7 +88,11 @@ bool cli_tooling::same_arg_type(const ArgValue& a, const ArgValue& b) {
 }
 
 ArgValue cli_tooling::parse_value(const std::string_view &option_name, size_t *index) {
-    std::string_view value = option_name.substr(0, *index);
+    if (*index >= option_name.size()) {
+        *index = std::string::npos;
+        return std::string{};
+    }
+    std::string_view value = option_name.substr(*index + 1);
 
     if (value.empty()) {
         *index = std::string::npos;
@@ -111,5 +120,13 @@ ArgValue cli_tooling::parse_value(const std::string_view &option_name, size_t *i
         return integer_value;
     }
 
+    double floating_value{};
+    const auto [float_ptr, float_ec] = std::from_chars(
+        value.data(), value.data() + value.size(), floating_value);
+    if (float_ec == std::errc{} && float_ptr == value.data() + value.size()) {
+        return floating_value;
+    }
     return std::string{value};
 }
+
+} // namespace optic

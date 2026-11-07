@@ -17,9 +17,10 @@
 #include "compiler/driver/module.hpp"
 #include "compiler/lexer/tokens.hpp"
 #include "trie_operators.hpp"
-
 #include <vector>
 #include <string>
+
+namespace optic {
 
 class Lexer {
 private:
@@ -75,3 +76,5 @@ public:
 };
 
 const char *to_string_token(TokenType type);
+
+} // namespace optic

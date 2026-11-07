@@ -1,11 +1,18 @@
-/* preprocessor.cpp */
+/**
+ * @file preprocessor.cpp
+ * @brief Experimental preprocessing and module dependency handling.
+ *
+ * C++ declarations and definitions belong to namespace optic.
+ */
+
+#include "compiler/preprocessor/preprocessor.hpp"
+#include <iostream>
+#include <cstddef>
+
+namespace optic {
 
 // TO REFACTORIZE
 
-#include "compiler/preprocessor/preprocessor.hpp"
-
-#include <iostream>
-#include <cstddef>
 
 /* MUCH LATER: How 'compiletime' works
 
@@ -200,10 +207,10 @@ std::string Preprocessor::read_keyword(const std::vector<uint8_t> &buffer, size_
 }
 
 /* */
-void Preprocessor::include_module(const Module &mod, std::vector<uint8_t> &buffer, size_t &cursor, SourceLocation &loc) {
+void Preprocessor::include_module(const std::string &mod, std::vector<uint8_t> &buffer, size_t &cursor, SourceLocation &loc) {
 	while (cursor < buffer.size() && isspace(buffer[cursor]) && buffer[cursor] != '\n') cursor++;
 	std::string dep_name = get_module_name(buffer, cursor, loc);
-	preprocessor_context.graph->add_dependency(mod.get_name(), dep_name);
+	preprocessor_context.graph->add_dependency(mod, dep_name);
 }
 
 /* */
@@ -305,3 +312,5 @@ void Preprocessor::combine_modules(std::vector<uint8_t> &output, const std::unor
 		output.insert(output.end(), it->second.buffer.begin(), it->second.buffer.end());
 	}
 }
+
+} // namespace optic

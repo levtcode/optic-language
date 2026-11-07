@@ -15,6 +15,9 @@
 #include "compiler/lexer/lexer.hpp"
 #include "compiler/lexer/tables.hpp"
 #include "compiler/lexer/trie_operators.hpp"
+#include <iostream>
+
+namespace optic {
 
 inline bool is_octal(int c) noexcept { return (c >= '0' && c <= '7'); }
 
@@ -403,7 +406,6 @@ void Lexer::tokenize(std::vector<token_t> &tokens) noexcept {
     TrieNode::destroy(trie_root);
 }
 
-#include <iostream>
 
 /**
  * Converts a TokenType enum value to its corresponding string representation for debugging.
@@ -428,3 +430,5 @@ void Lexer::print_tokens(Module &module) noexcept {
         std::cout << "In file: " << module.get_path() << "\n\n";
     }
 }
+
+} // namespace optic

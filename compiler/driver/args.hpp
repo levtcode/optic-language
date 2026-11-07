@@ -1,10 +1,17 @@
-/* args.hpp */
+/**
+ * @file args.hpp
+ * @brief Compiler argument inspection and typed option parsing.
+ *
+ * C++ declarations and definitions belong to namespace optic.
+ */
 
 #pragma once
 
 #include "compiler/driver/compiler_instance.hpp"
 #include <string>
 #include <string_view>
+
+namespace optic {
 
 namespace cli_tooling {
 void print_args_files(std::vector<std::string>&);
@@ -16,3 +23,5 @@ ArgValue parse_value(const std::string_view &option_name, size_t *index);
 int match_compiler_arg(const std::string_view &arg, size_t *index);
 bool same_arg_type(const ArgValue& a, const ArgValue& b);
 }
+
+} // namespace optic
