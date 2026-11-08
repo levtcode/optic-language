@@ -6,6 +6,7 @@
 #include "compiler/lexer/lexer.hpp"
 #include <fstream>
 #include <iterator>
+#include <iostream>
 
 namespace optic::compiler::preprocessor {
 using namespace driver;
@@ -98,8 +99,13 @@ bool Preprocessor::process(ModuleID id, std::size_t depth) {
                 }
                 if (!process(dependency, depth + 1)) {
                     error(module, token, "Imported module failed preprocessing: '" + graph.get_module(dependency)->get_path() + "'.");
-                } else macros.import(macro_environments.at(dependency),
-                    {SourceKind::BufferNoAST, module.get_path(), "", token.line, token.column});
+                } else {
+                    macros.import(macro_environments.at(dependency),
+                        {SourceKind::BufferNoAST, module.get_path(), "", token.line, token.column});
+                    if (context.config().mode == CompilerMode::Debug)
+                        std::cout << "[preprocessor] Imported " << graph.get_module(dependency)->get_path()
+                                  << " from " << module.get_path() << " successfully.\n";
+                }
                 continue;
             }
             if (token.type == TokenType::Macro) {
@@ -140,6 +146,13 @@ bool Preprocessor::run(const std::vector<std::string>& input_files) {
     }
     if (!context.modules().topological_sort()) {
         context.diagnostics().report({}, "Error: Invalid module dependency graph.", "", "", DiagnosticsLevel::Error);
+    }
+    if (context.config().mode == CompilerMode::Debug) {
+        std::cout << "\n----- PREPROCESSOR MACROS -----\n";
+        for (const auto id : context.modules().compilation_order()) {
+            std::cout << "In file: " << context.modules().get_module(id)->get_path() << "\n";
+            if (const auto it = macro_environments.find(id); it != macro_environments.end()) it->second.print(std::cout);
+        }
     }
     return context.diagnostics().error_count() == errors_before;
 }

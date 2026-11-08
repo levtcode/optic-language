@@ -8,7 +8,7 @@ is accepted; `Macro` is an ordinary identifier. Declarations must be at module s
 
 ```optic
 macro MyMacro {
-    value = -1;
+    value: -1;
     expression: "int value = "
 
     fn macro_funcion(int val) {
@@ -24,7 +24,7 @@ MyMacro                           // injects: int value = -1;
 MyMacro.macro_funcion(42);         // changes this module's macro state
 MyMacro                           // injects: int value = 42;
 string source = MyMacro.to_string(); // a string literal: "int value = 42;"
-string description = MyMacro.repr(); // a string describing the macro object
+string description = MyMacro.__repr__(); // a string describing the macro object
 ```
 
 `fn` is a contextual word recognized by the macro parser, not a global language
@@ -34,17 +34,16 @@ Function bodies are parsed on declaration and evaluated when called.
 
 ## Fields and nullability
 
-`value = expression` is required and accepts a scalar value: signed 64-bit `int`,
-finite `float` (double precision), `bool`, `string`, Unicode `char`, or `null`.
+`value: expression` is required and accepts a value: signed 64-bit `int`,
+finite `float` (double precision), `bool`, `string`, Unicode `char`, or `null`, arrays and objects with named fields.
 Its type can change on assignment; parameter, local and return types are checked.
 
-`expression: expression` declares a non-null string prefix. Use `expression?`
-to permit `null`. Omitting the field initializes it to nullable `null`:
+`expression: expression` declares a non-null string prefix. Use `expression: ?` to initialize a nullable expression to `null`. Omitting the field initializes it to nullable `null`:
 
 ```optic
 macro Optional {
-    value = 7;
-    expression?: null
+    value: 7;
+    expression: ?
 
     fn set_prefix(string? prefix) {
         expression = prefix;
@@ -77,7 +76,7 @@ An omitted expression after `return` returns `void`.
 | `MyMacro.method(arguments)` | Evaluate a macro function; emit its scalar result as a literal. |
 | `MyMacro.value`, `MyMacro.expression` | Emit the current field value as a literal. |
 | `MyMacro.to_string(arguments)` | Return source text as a string literal, without injecting that text. |
-| `MyMacro.repr()` | Return a read-only representation of the macro object as a string literal. |
+| `MyMacro.__repr__()` | Return a read-only representation of the macro object as a string literal. |
 
 Void function calls are standalone preprocessing statements and emit no tokens;
 their optional semicolon is consumed. A void call cannot initialize a runtime
@@ -96,12 +95,12 @@ Every `to_string` overload must explicitly declare `-> string`. The zero-argumen
 built-in remains available when only parameterized overloads are declared.
 A custom zero-argument overload replaces that built-in behavior.
 
-`repr()` takes no arguments, cannot be overridden, and never calls `to_string`.
+`__repr__()` takes no arguments, cannot be overridden, and never calls `to_string`.
 It reports the macro name, current fields and custom function signatures. For
 example:
 
 ```text
-macro MyMacro { value = 42; expression = "int value = "; functions = [macro_funcion(int) -> void, to_string() -> string] }
+macro MyMacro { value: 42; expression: "int value = "; functions = [macro_funcion(int) -> void, to_string() -> string] }
 ```
 
 Function groups are represented in name order, with overloads in declaration
@@ -116,7 +115,7 @@ available.
 
 ```optic
 macro Calculate {
-    value = 3;
+    value: 3;
 
     fn choose(int input) -> int { return input * value; }
     fn choose(string input) -> string { return f"{input}:{value}"; }
@@ -224,7 +223,49 @@ The following independent limits turn runaway computations into diagnostics:
 - 1 MiB per string or generated-source fragment.
 - 1,000,000 generated tokens per module across successful invocations.
 
-There is no macro filesystem/process I/O, runtime-variable access, generic
-container/object type, wildcard namespace lookup or separate `compiletime`
+There is no macro filesystem/process I/O, runtime-variable access, custom
+class construction or custom object methods, wildcard namespace lookup or separate `compiletime`
 construct. `directive` and `compiletime` are ordinary identifiers. The runtime
 parser, semantic analysis and code generation remain separate future phases.
+
+## Collections and member access
+
+Arrays use `[5, 4, 2, 1, 3]`; objects use `{name: "Ada", items: [2, 3]}`.
+They can contain nested values. Functions can declare `array` and `object`
+parameters, locals and return types. Access fields using `.name`, array elements
+using `[index]`, and object fields using `["name"]`. Unknown members, duplicate
+keys and out-of-range indexes produce diagnostics. Values retain copy semantics
+across macro calls and imports. Value nesting is bounded to 128 levels.
+
+Strings, arrays and objects expose `.length`. For valid UTF-8 strings, length
+counts Unicode code points. Object length counts fields. Available methods are
+ASCII string `.upper()` and `.lower()`, and integer array `.sorted()`; each
+returns a new value. Assignment inside functions still uses `=`:
+
+```optic
+macro Numbers {
+    value: [5, 4, 2, 1, 3]
+    expression: ?
+    fn sort_value() -> bool {
+        value = value.sorted();
+        return true;
+    }
+}
+Numbers.sort_value()
+Numbers.value[0]
+```
+
+The scalar-only restriction has been lifted for these collections. User-defined
+classes, object method declarations and the complete runtime type system still
+require their own language contracts and evaluator support; this implementation
+does not claim to execute arbitrary Optic objects or C-style `for` statements.
+
+## Debug inspection
+
+`opticc debug` prints successful imports with their importing paths, followed by
+`----- PREPROCESSOR MACROS -----`. Each module lists its visible macros, current
+`value`, `expression` (`null` when absent), the `to_string` implementation in use,
+the built-in `__repr__` signature, and every custom function overload with its
+body. Function bodies are reconstructed from tokens; comments are not retained.
+Inspection uses runtime `CompilerMode::Debug` and works in Release builds too.
+Build/Run modes do not print this inspection output.

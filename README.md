@@ -81,7 +81,7 @@ Optic is currently in the **pre-alpha** stage.
 - Driver
 - Lexer
 - Token preprocessing and recursive module imports
-- Stateful macros with typed function overloads, `repr` and `to_string`
+- Stateful macros with typed function overloads, `__repr__` and `to_string`
 
 ### In Progress
 
@@ -132,7 +132,7 @@ ctest --test-dir build --output-on-failure
 A C++23 toolchain with `<format>` support and CMake 3.20+ are required. Python 3
 is optional for integration tests. Both `optic` and `opticc` install into `bin`.
 
-`debug` prints compiler configuration, module dependencies and preprocessed tokens. `build` and
+`debug` prints compiler configuration, module dependencies, imports, macro state and preprocessed tokens. `build` and
 `run` fail explicitly after frontend analysis because code generation and the
 runtime are pending. Package commands are also unimplemented.
 
