@@ -17,14 +17,15 @@
 #include "compiler/driver/module.hpp"
 #include "compiler/lexer/tokens.hpp"
 #include "trie_operators.hpp"
-
 #include <vector>
 #include <string>
 
+namespace optic::compiler::lexer {
+
 class Lexer {
 private:
-    Module            *module;
-    DiagnosticsEngine *diagnostic_engine;
+    driver::Module            *module;
+    driver::DiagnosticsEngine *diagnostic_engine;
     TrieNode          *trie_root;
 
     /// Current position within the module's source buffer.
@@ -50,7 +51,7 @@ private:
     }
 
 public:
-    Lexer(Module *mod, DiagnosticsEngine *diag_engine) : module(mod), diagnostic_engine(diag_engine) {}
+    Lexer(driver::Module *mod, driver::DiagnosticsEngine *diag_engine) : module(mod), diagnostic_engine(diag_engine) {}
 
     token_t read_identifier() noexcept;
     token_t read_string() noexcept;
@@ -71,7 +72,9 @@ public:
     /// Main lexer entry point. Performs lexical analysis over the source module 
     /// and generates the complete token stream.
     void tokenize(std::vector<token_t> &tokens) noexcept;
-    void print_tokens(Module&) noexcept;
+    void print_tokens(driver::Module&) noexcept;
 };
 
 const char *to_string_token(TokenType type);
+
+} // namespace optic::compiler::lexer

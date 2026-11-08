@@ -1,16 +1,23 @@
-/* preprocessor.hpp */
+/**
+ * @file preprocessor.hpp
+ * @brief Experimental preprocessing and module dependency handling.
+ *
+ * C++ declarations and definitions belong to namespace optic::compiler::preprocessor.
+ */
 
 // TO REFACTORIZE
 
 #pragma once
+
 #include "compiler/driver/diagnostics_engine.hpp"
 #include "compiler/driver/module.hpp"
-
 #include <cstddef>
 #include <cstdint>
 #include <map>
 #include <vector>
 #include <unordered_map>
+
+namespace optic::compiler::preprocessor {
 
 /* */
 struct PreprocessedModule {
@@ -66,23 +73,23 @@ public:
 
 /* */
 struct PreprocessorContext {
-    DiagnosticsEngine *diagnostic_engine;
+    driver::DiagnosticsEngine *diagnostic_engine;
     DependencyGraph *graph;
 
-    PreprocessorContext(DiagnosticsEngine *diag_engine, DependencyGraph *g) : diagnostic_engine(diag_engine), graph(g) {}
+    PreprocessorContext(driver::DiagnosticsEngine *diag_engine, DependencyGraph *g) : diagnostic_engine(diag_engine), graph(g) {}
 };
 
 /* */
 class Preprocessor {
     PreprocessorContext preprocessor_context;
 
-    void include_module(const Module&, std::vector<uint8_t> &buff, size_t &cur, SourceLocation&);
+    void include_module(const std::string&, std::vector<uint8_t> &buff, size_t &cur, driver::SourceLocation&);
     bool is_valid_directive(const std::string&);
 
-    std::string get_directive_name(const std::vector<uint8_t> &buff, size_t &cur, SourceLocation&);
-    std::string get_macro_name(const std::vector<uint8_t> &buff, size_t &cur, SourceLocation&);
-    std::string get_module_name(const std::vector<uint8_t> &buff, size_t &cur, SourceLocation&);
-    std::string read_keyword(const std::vector<uint8_t> &buff, size_t &cur, SourceLocation&);
+    std::string get_directive_name(const std::vector<uint8_t> &buff, size_t &cur, driver::SourceLocation&);
+    std::string get_macro_name(const std::vector<uint8_t> &buff, size_t &cur, driver::SourceLocation&);
+    std::string get_module_name(const std::vector<uint8_t> &buff, size_t &cur, driver::SourceLocation&);
+    std::string read_keyword(const std::vector<uint8_t> &buff, size_t &cur, driver::SourceLocation&);
 
 public:
     Preprocessor(const PreprocessorContext &pr_ctx) : preprocessor_context(pr_ctx) {}
@@ -96,3 +103,5 @@ public:
 
     void combine_modules(std::vector<uint8_t> &out, const std::unordered_map<std::string, PreprocessedModule> &modules);
 };
+
+} // namespace optic::compiler::preprocessor

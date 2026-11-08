@@ -1,6 +1,13 @@
-/* module.cpp */
+/**
+ * @file module.cpp
+ * @brief Source modules and their dependency graph.
+ *
+ * C++ declarations and definitions belong to namespace optic::compiler::driver.
+ */
 
 #include "module.hpp"
+
+namespace optic::compiler::driver {
 
 ModuleID ModuleGraph::add_module(std::unique_ptr<Module> module) {
     modules[next_id++] = std::move(module);
@@ -14,3 +21,5 @@ Module* ModuleGraph::get_module(ModuleID id) noexcept {
 
     return modules[id].get();
 }
+
+} // namespace optic::compiler::driver

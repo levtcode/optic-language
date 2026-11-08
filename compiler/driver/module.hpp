@@ -1,10 +1,14 @@
-/* module.hpp */
+/**
+ * @file module.hpp
+ * @brief Source modules and their dependency graph.
+ *
+ * C++ declarations and definitions belong to namespace optic::compiler::driver.
+ */
 
 #pragma once
 
 #include "compiler/driver/diagnostics_engine.hpp"
 #include "compiler/lexer/tokens.hpp"
-
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -13,6 +17,8 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
+namespace optic::compiler::driver {
 
 using ModuleID = std::uint32_t;
 
@@ -30,7 +36,7 @@ private:
     std::filesystem::path path;
     std::string           buffer;
     SourceLocation        module_location;
-    std::vector<token_t>  tokens;
+    std::vector<lexer::token_t>  tokens;
     std::vector<ModuleID> dependencies;
 
 public:
@@ -61,11 +67,11 @@ public:
         return module_location;
     }
 
-    std::vector<token_t>& get_tokens() noexcept {
+    std::vector<lexer::token_t>& get_tokens() noexcept {
         return tokens;
     }
 
-    const std::vector<token_t>& get_tokens() const noexcept {
+    const std::vector<lexer::token_t>& get_tokens() const noexcept {
         return tokens;
     }
 
@@ -108,3 +114,5 @@ private:
     std::vector<ModuleID> ordered_modules;
     ModuleID next_id = 1;
 };
+
+} // namespace optic::compiler::driver

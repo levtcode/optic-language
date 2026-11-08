@@ -1,9 +1,15 @@
-/* diagnostic_engine.cpp */
+/**
+ * @file diagnostics_engine.cpp
+ * @brief Source diagnostics, severity reporting and diagnostic presentation.
+ *
+ * C++ declarations and definitions belong to namespace optic::compiler::driver.
+ */
 
 #include "compiler/driver/diagnostics_engine.hpp"
-
 #include <iostream>
 #include <format>
+
+namespace optic::compiler::driver {
 
 /* */
 const char* Diagnostic::severity_to_string(const DiagnosticsLevel level) {
@@ -160,3 +166,5 @@ void DiagnosticsEngine::run_guide_engine() noexcept {
         show_guide_engine_menu();
     }
 }
+
+} // namespace optic::compiler::driver

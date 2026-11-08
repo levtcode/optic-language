@@ -1,10 +1,14 @@
-/* compiler_instance.hpp */
+/**
+ * @file compiler_instance.hpp
+ * @brief Compiler configuration and frontend phase coordination.
+ *
+ * C++ declarations and definitions belong to namespace optic::compiler::driver.
+ */
 
 #pragma once
 
 #include "compiler/driver/diagnostics_engine.hpp"
 #include "compiler/driver/module.hpp"
-
 #include <filesystem>
 #include <cstdint>
 #include <optional>
@@ -12,6 +16,8 @@
 #include <unordered_map>
 #include <variant>
 #include <vector>
+
+namespace optic::compiler::driver {
 
 using ArgValue = std::variant<
     bool,
@@ -27,9 +33,9 @@ inline constexpr SourceFileID invalid_source_file_id = 0;
 bool get_data(const std::string fname, std::string &dest, DiagnosticsEngine &diagnostic_engine) noexcept;
 
 enum class CompilerMode {
-    Build,  // Builds the source code into binary format
-    Run,    // Builds and executes the source code in a runtime engine
-    Debug   // Builds and outputs debugging messages to stdout
+    Build,  // Request a native artifact (backend pending)
+    Run,    // Request bytecode execution (backend/runtime pending)
+    Debug   // Inspect configuration and lexical tokens; no debugger
 };
 
 /* */
@@ -178,6 +184,8 @@ private:
     CompilerContext     compiler_context;
 
 public:
+    /// Analyze argc compiler arguments. argv excludes the program name and mode.
+    /// Debug succeeds after frontend inspection; Build/Run fail until a backend exists.
     [[nodiscard]] int run(int argc, char **argv, CompilerMode) noexcept;
     [[noreturn]]  void stop(bool core_dump=false) noexcept;
 
@@ -194,3 +202,5 @@ public:
         const std::string& option_name
     ) const;
 };
+
+} // namespace optic::compiler::driver

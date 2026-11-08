@@ -77,7 +77,7 @@ Optic is currently in the **pre-alpha** stage.
 
 ### Implemented
 
-- Core
+- CLI coordinator (`optic`) and standalone compiler (`opticc`)
 - Driver
 - Lexer
 
@@ -103,42 +103,38 @@ Optic is currently in the **pre-alpha** stage.
 
 ```mermaid
 flowchart TD
-
-    A["optic.cpp<br/>(Entry Point)"]
-
-    B["Core<br/>Command Manager"]
-
-    C["CLI Arguments"]
-
-    D["Compiler"]
-
-    E["Runtime"]
-
-    F["Optic Library<br/>opticlib"]
-
-    G["Cargo"]
-
-    H["Tests & Benchmarks"]
-
-    A --> B
-
-    B --> C
-    B --> D
-    B --> E
-    B --> F
-    B --> G
-    B --> H
-
-    D --> D1["Driver"]
-    D --> D2["Lexer"]
-    D --> D3["Preprocessor"]
-    D --> D4["Parser"]
-    D --> D5["Semantic Analysis"]
-    D --> D6["Intermediate Representation"]
-    D --> D7["Optimizer"]
-    D --> D8["Code Generation"]
-    D --> D9["Linker"]
+    A["optic.cpp"] --> B["optic CLI: cli/cli_tool"]
+    B -->|independent process| C["opticc: compiler/opticc.cpp"]
+    C --> D["Compiler driver"]
+    D --> E["Lexer"]
+    D -. pending .-> F["Preprocessor / Parser / Semantic analysis"]
+    D -. pending .-> G["IR / Optimizer / Code generation / Linker"]
+    B -. planned .-> H["Runtime / Package manager / Debugger"]
 ```
+
+The CLI and compiler build as separate executable targets. `optic` delegates
+compiler work through the OS process API; it does not embed compiler internals.
+C++ APIs share the `optic::` root and are grouped by subsystem: compiler
+APIs use `optic::compiler::driver`, `optic::compiler::lexer`, and
+`optic::compiler::preprocessor`; CLI coordination uses `optic::cli`.
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build
+ctest --test-dir build --output-on-failure
+./build/optic --help
+./build/optic debug example.optic
+```
+
+A C++23 toolchain with `<format>` support and CMake 3.20+ are required. Python 3
+is optional for integration tests. Both `optic` and `opticc` install into `bin`.
+
+`debug` currently prints compiler configuration and lexical tokens. `build` and
+`run` fail explicitly after frontend analysis because code generation and the
+runtime are pending. Package commands are also unimplemented.
+
+See [CLI architecture and migration](docs/cli.md) for the component contract,
+compiler discovery, exit statuses, per-file changes and platform limitations.
 
 ---
 

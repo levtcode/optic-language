@@ -1,11 +1,17 @@
-/* tables.hpp */
+/**
+ * @file tables.hpp
+ * @brief Keyword, operator and symbol lookup tables for lexical analysis.
+ *
+ * C++ declarations and definitions belong to namespace optic::compiler::lexer.
+ */
 
 #pragma once
 
 #include "compiler/lexer/tokens.hpp"
-
 #include <unordered_map>
 #include <string_view>
+
+namespace optic::compiler::lexer {
 
 const std::unordered_map<std::string_view, TokenType> operator_table = {
     { "=", TokenType::Equal },
@@ -97,3 +103,5 @@ const std::unordered_map<int, TokenType> symbol_table = {
     { '?', TokenType::TernaryOp },
     { 'f', TokenType::FString }
 };
+
+} // namespace optic::compiler::lexer
