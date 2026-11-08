@@ -25,6 +25,11 @@ and `-C Debug` for CTest. `cmake --build build --target optic` builds only the
 coordinator; `--target opticc` builds only the compiler. Disable test targets
 with `-DBUILD_TESTING=OFF`.
 
+`optic_frontend` is an internal static library shared by the compiler and C++
+contract tests. The coordinator does not link it. This library does not implement
+the future runtime-language parser; macro functions have a private preprocessing
+grammar.
+
 Both tools install into `bin/`. When running directly from a build directory,
 they also sit beside each other (in the configuration directory where applicable).
 
@@ -101,7 +106,7 @@ subsystems nested under `optic::compiler`:
 | `optic::cli` | `CliTool`, component discovery and process execution. |
 | `optic::compiler::driver` | `CompilerInstance`, configuration, diagnostics, `Module`, `ModuleGraph` and compiler argument helpers. |
 | `optic::compiler::lexer` | `Lexer`, tokens, lookup tables and operator trie. |
-| `optic::compiler::preprocessor` | Token preprocessing and recursive import loading. |
+| `optic::compiler::preprocessor` | Token preprocessing, import loading and typed macro evaluation. |
 
 Namespaces describe subsystems, not individual files. For example, `Module`
 belongs to the driver, so there is no `module` namespace. The future parser
@@ -130,6 +135,7 @@ list included inside the compiler implementation; it is not a standalone API.
 | `compiler/lexer/tokens.hpp` | Token types under `optic::compiler::lexer`. |
 | `compiler/lexer/lexer.cpp` | Longest operator matching reads ahead without cursor rollback or a dynamically allocated trie. |
 | `compiler/preprocessor/preprocessor.hpp`, `.cpp` | Token preprocessing over the driver module graph; see [preprocessor documentation](preprocessor.md). |
+| `compiler/preprocessor/macro.hpp`, `.cpp` | Per-module macro environments, a private macro grammar, typed scalar evaluation and transactional expansion; see [macros](macros.md). |
 | `CMakeLists.txt` | Separate build/install targets and optional CTest integration. |
 | `tests/cli_component.cpp` | Executable fixture for argv, streams, exit codes and POSIX signals. |
 | `tests/cli_integration.py` | Integration checks using real processes and temporary directories. |

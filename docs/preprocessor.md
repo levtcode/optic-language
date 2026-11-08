@@ -31,9 +31,9 @@ source location. Strings and comments containing `import` remain ordinary
 strings and comments.
 
 Each canonical filesystem path identifies one module. Repeated imports,
-relative path aliases and symlinks reuse it. Source files must be readable regular files and
-use the `.optic` extension; directories and named pipes are rejected. A missing or lexically invalid dependency fails the
-compilation. Direct and indirect cycles are errors, including self-imports;
+relative path aliases and symlinks reuse it. Source files must be readable
+regular files and use the `.optic` extension; directories and named pipes are
+rejected. A missing or lexically invalid dependency fails the compilation. Direct and indirect cycles are errors, including self-imports;
 rejecting an edge preserves the rest of the graph. Import nesting is limited to
 256 modules so pathological inputs cannot exhaust the C++ call stack.
 
@@ -42,13 +42,26 @@ with input/discovery order breaking ties. Dependency edges retain declaration
 order and duplicates are ignored. Rebuilding the order never appends stale
 entries.
 
-## Pending language semantics
+## Macros
 
-`macro`, `directive` and `compiletime` have no specification in this repository.
-Their old implementation silently dropped keywords or left unfinished stubs.
-Until their language contract is supplied, these constructs produce explicit
-errors rather than silently changing the program. General compile-time
-execution will also need the parser and semantic evaluator.
+`Macro` declarations contain a value, an optional nullable expression prefix,
+and typed compile-time functions. Bare macro names inject the source returned
+by `to_string`; explicit member calls can update state or return scalar values.
+See [macro declarations and evaluation](macros.md) for the complete syntax,
+overload rules, special functions and execution limits.
+
+Imported modules export their visible macro definitions. Imports copy field
+state into the importer; they do not share mutable state between modules.
+Definitions with the same origin are deduplicated (including diamond imports),
+while conflicting names from different definitions are errors. A repeated import
+never resets a macro that the importer has already changed. When two import
+paths provide different field snapshots of the same definition, the first
+visible snapshot wins. Visibility follows source order, including imports;
+there is no declaration hoisting.
+
+`directive` and `compiletime` have been removed as language constructs and token
+kinds. Both spellings are now ordinary identifiers. Platform APIs belong in a
+future library; compiler mode is selected through the CLI.
 
 ## Frontend contract
 
@@ -65,6 +78,11 @@ on demand and updates the existing modules. There is no separate
 `PreprocessedModule`, secondary dependency graph, combined source buffer or
 unimplemented `SourceManager` API. Import statements are removed from the parser
 token stream; dependencies remain available through `Module::get_dependencies()`.
+
+Macro environments live only for the preprocessing session. Definitions use a
+private macro parser and immutable function bodies; importing a definition
+copies its field state. The `optic_frontend` static library shares this code
+between `opticc` and its contract tests, independently of the `optic` CLI.
 
 The future parser should iterate `ModuleGraph::compilation_order()`, parse each
 ready module separately, and associate its AST with that module's ID. A token's
@@ -110,5 +128,9 @@ ctest --test-dir build --output-on-failure
 The C++ `frontend` checks exercise graph invariants, token positions, escapes,
 operators and malformed lexical inputs. Python `preprocessor_integration`
 checks real compiler sessions, import ordering, path aliases, cycles, failures,
-EOF handling and inspection mode. Existing CLI integration checks also run.
+EOF handling and inspection mode. `macros` checks environment transactions,
+import isolation, all truncated token prefixes and 500 mutated declarations.
+`macro_integration` exercises real invocations, overloads, nullable values,
+special functions, arithmetic, recursion, generated-source validation and
+execution limits. Existing CLI integration checks also run.
 

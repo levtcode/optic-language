@@ -29,7 +29,7 @@ enum class SourceKind {
     Stdin,
     BufferAST,
     BufferNoAST,
-};  
+};
 
 /* */
 struct SourceLocation {
@@ -40,7 +40,7 @@ struct SourceLocation {
     unsigned    column = 1;
 
     SourceLocation() = default;
-    SourceLocation(SourceKind src_kind, const std::string &f, const std::string &func_name, 
+    SourceLocation(SourceKind src_kind, const std::string &f, const std::string &func_name,
         const unsigned ln, const unsigned col) :
         source_kind(src_kind), file(f), function_name(func_name), line(ln), column(col) {}
 };
@@ -99,6 +99,8 @@ public:
     inline int  warnings_count() const noexcept { return warnings_num;   }
     inline int  error_count()    const noexcept { return errors_num;     }
     inline bool has_errors()     const noexcept { return errors_num > 0; }
+
+    const std::vector<Diagnostic>& entries() const noexcept { return diagnostics; }
 
     DiagnosticsConfig get_config() const noexcept { return config; }
     void set_config(DiagnosticsConfig value) noexcept { config = value; }

@@ -54,52 +54,77 @@ bool Preprocessor::process(ModuleID id, std::size_t depth) {
     lexer::Lexer(module, context.diagnostics()).tokenize(input);
     auto& output = module.get_tokens();
     output.clear();
+    if (context.diagnostics().error_count() != errors_before) {
+        output = std::move(input);
+        module.set_state(ModuleState::Failed);
+        return false;
+    }
+    auto& macros = macro_environments.try_emplace(id).first->second;
     unsigned braces = 0;
-    for (std::size_t cursor = 0; cursor + 1 < input.size();) {
-        const auto token = input[cursor++];
-        if (token.type == TokenType::Import) {
-            const auto start = cursor;
-            while (cursor + 1 < input.size() && input[cursor].line == token.line &&
-                   input[cursor].type != TokenType::Semicolon) ++cursor;
-            const auto end = cursor;
-            if (cursor + 1 < input.size() && input[cursor].type == TokenType::Semicolon) ++cursor;
-            if (braces != 0) { error(module, token, "Imports are only allowed at module scope."); continue; }
-            std::filesystem::path path;
-            if (end == start + 1 && input[start].type == TokenType::StringLiteral) {
-                const auto& name = input[start].value;
-                if (name.empty() || name.find('\0') != std::string::npos) {
-                    error(module, token, "Invalid empty or NUL-containing import path."); continue;
+    try {
+        for (std::size_t cursor = 0; cursor + 1 < input.size();) {
+            const auto token = input[cursor++];
+            if (token.type == TokenType::Import) {
+                const auto start = cursor;
+                while (cursor + 1 < input.size() && input[cursor].line == token.line &&
+                       input[cursor].type != TokenType::Semicolon) ++cursor;
+                const auto end = cursor;
+                if (cursor + 1 < input.size() && input[cursor].type == TokenType::Semicolon) ++cursor;
+                if (braces != 0) { error(module, token, "Imports are only allowed at module scope."); continue; }
+                std::filesystem::path path;
+                if (end == start + 1 && input[start].type == TokenType::StringLiteral) {
+                    const auto& name = input[start].value;
+                    if (name.empty() || name.find('\0') != std::string::npos) {
+                        error(module, token, "Invalid empty or NUL-containing import path."); continue;
+                    }
+                    path = name;
+                } else {
+                    // Bare names use dotted module components: import math.vector
+                    bool expect_name = true, valid = start != end;
+                    for (auto i = start; i < end; ++i) {
+                        if (expect_name && input[i].type == TokenType::Identifier) path /= input[i].value;
+                        else if (expect_name || input[i].type != TokenType::Point) { valid = false; break; }
+                        expect_name = !expect_name;
+                    }
+                    if (!valid || expect_name) { error(module, token, "Expected a quoted path or dotted module name after 'import'."); continue; }
                 }
-                path = name;
-            } else {
-                // Bare names use dotted module components: import math.vector
-                bool expect_name = true, valid = start != end;
-                for (auto i = start; i < end; ++i) {
-                    if (expect_name && input[i].type == TokenType::Identifier) path /= input[i].value;
-                    else if (expect_name || input[i].type != TokenType::Point) { valid = false; break; }
-                    expect_name = !expect_name;
+                if (!path.has_extension()) path += OPTIC_EXTENSION;
+                if (path.is_relative()) path = std::filesystem::path(module.get_path()).parent_path() / path;
+                const auto dependency = load(path, {SourceKind::BufferNoAST, module.get_path(), "", token.line, token.column});
+                if (dependency == invalid_module_id) continue;
+                if (!graph.add_dependency(id, dependency)) {
+                    error(module, token, "Import cycle: '" + module.get_path() + "' -> '" + graph.get_module(dependency)->get_path() + "'.");
+                    continue;
                 }
-                if (!valid || expect_name) { error(module, token, "Expected a quoted path or dotted module name after 'import'."); continue; }
-            }
-            if (!path.has_extension()) path += OPTIC_EXTENSION;
-            if (path.is_relative()) path = std::filesystem::path(module.get_path()).parent_path() / path;
-            const auto dependency = load(path, {SourceKind::BufferNoAST, module.get_path(), "", token.line, token.column});
-            if (dependency == invalid_module_id) continue;
-            if (!graph.add_dependency(id, dependency)) {
-                error(module, token, "Import cycle: '" + module.get_path() + "' -> '" + graph.get_module(dependency)->get_path() + "'.");
+                if (!process(dependency, depth + 1)) {
+                    error(module, token, "Imported module failed preprocessing: '" + graph.get_module(dependency)->get_path() + "'.");
+                } else macros.import(macro_environments.at(dependency),
+                    {SourceKind::BufferNoAST, module.get_path(), "", token.line, token.column});
                 continue;
             }
-            if (!process(dependency, depth + 1)) {
-                error(module, token, "Imported module failed preprocessing: '" + graph.get_module(dependency)->get_path() + "'.");
+            if (token.type == TokenType::Macro) {
+                if (braces != 0) throw MacroError(
+                    {SourceKind::BufferNoAST, module.get_path(), "", token.line, token.column},
+                    "Macros may only be declared at module scope.");
+                macros.define(input, cursor, module.get_path());
+                continue;
             }
-            continue;
+            if (token.type == TokenType::Identifier && macros.contains(token.value)) {
+                --cursor;
+                auto generated = macros.expand(input, cursor, module.get_path());
+                for (const auto& item : generated) {
+                    if (item.type == TokenType::LeftBrace) ++braces;
+                    if (item.type == TokenType::RightBrace && braces != 0) --braces;
+                }
+                output.insert(output.end(), std::make_move_iterator(generated.begin()), std::make_move_iterator(generated.end()));
+                continue;
+            }
+            if (token.type == TokenType::LeftBrace) ++braces;
+            if (token.type == TokenType::RightBrace && braces != 0) --braces;
+            output.push_back(token);
         }
-        if (token.type == TokenType::Macro || token.type == TokenType::Directive || token.type == TokenType::CompileTime) {
-            error(module, token, "Preprocessing construct has no defined semantics yet: '" + token.value + "'.");
-        }
-        if (token.type == TokenType::LeftBrace) ++braces;
-        if (token.type == TokenType::RightBrace && braces != 0) --braces;
-        output.push_back(token);
+    } catch (const MacroError& failure) {
+        context.diagnostics().report(failure.location, "Error: " + std::string(failure.what()), "", "", DiagnosticsLevel::Error);
     }
     output.push_back(input.back());
     const bool success = context.diagnostics().error_count() == errors_before;

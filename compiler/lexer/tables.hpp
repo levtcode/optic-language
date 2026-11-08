@@ -52,9 +52,8 @@ const std::unordered_map<std::string_view, TokenType> operator_table = {
 
 const std::unordered_map<std::string_view, TokenType> keyword_table = {
     { "import", TokenType::Import },
-    { "directive", TokenType::Directive },
     { "macro", TokenType::Macro },
-    { "compiletime", TokenType::CompileTime },
+    { "Macro", TokenType::Macro },
     { "asm", TokenType::Asm },
     { "new", TokenType::New },
     { "delete", TokenType::Delete },

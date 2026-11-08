@@ -73,11 +73,9 @@ X(LessEqual)
 X(Greater)
 X(GreaterEqual)
 
-// ===== Preprocessor / directives =====
+// ===== Preprocessor =====
 X(Import)
-X(Directive)
 X(Macro)
-X(CompileTime)
 
 // ===== Keywords =====
 X(Asm)

@@ -81,10 +81,10 @@ Optic is currently in the **pre-alpha** stage.
 - Driver
 - Lexer
 - Token preprocessing and recursive module imports
+- Stateful macros with typed function overloads, `repr` and `to_string`
 
 ### In Progress
 
-- Macro, directive and compile-time language semantics
 
 - Parser
 - Semantic analysis
@@ -137,7 +137,8 @@ is optional for integration tests. Both `optic` and `opticc` install into `bin`.
 runtime are pending. Package commands are also unimplemented.
 
 See [preprocessing and module ownership](docs/preprocessor.md) for import syntax,
-source locations and the parser integration contract.
+source locations and the parser integration contract, and [macros](docs/macros.md)
+for compile-time fields, functions and expansion rules.
 
 See [CLI architecture and migration](docs/cli.md) for the component contract,
 compiler discovery, exit statuses, per-file changes and platform limitations.
