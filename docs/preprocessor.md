@@ -84,7 +84,7 @@ operators (`a-1` is identifier, minus, integer). The longest valid operator wins
 
 Empty strings and escapes in the first character work. Normal quoted literals
 support standard escapes, one to three octal digits, one to two hexadecimal
-digits after `\\x`, four after `\\u` and eight after `\\U`. Unicode escapes must
+digits after `\x`, four after `\u` and eight after `\U`. Unicode escapes must
 be scalar values and are encoded as UTF-8. Octal escapes must fit in one byte.
 Single quotes produce `CharLiteral` tokens; double quotes produce `StringLiteral`
 tokens. Numeric values use `IntegerLiteral` and `FloatLiteral`; type keywords
@@ -111,3 +111,4 @@ The C++ `frontend` checks exercise graph invariants, token positions, escapes,
 operators and malformed lexical inputs. Python `preprocessor_integration`
 checks real compiler sessions, import ordering, path aliases, cycles, failures,
 EOF handling and inspection mode. Existing CLI integration checks also run.
+
