@@ -80,10 +80,12 @@ Optic is currently in the **pre-alpha** stage.
 - CLI coordinator (`optic`) and standalone compiler (`opticc`)
 - Driver
 - Lexer
+- Token preprocessing and recursive module imports
 
 ### In Progress
 
-- Preprocessor
+- Macro, directive and compile-time language semantics
+
 - Parser
 - Semantic analysis
 - Intermediate representation (IR)
@@ -106,8 +108,9 @@ flowchart TD
     A["optic.cpp"] --> B["optic CLI: cli/cli_tool"]
     B -->|independent process| C["opticc: compiler/opticc.cpp"]
     C --> D["Compiler driver"]
-    D --> E["Lexer"]
-    D -. pending .-> F["Preprocessor / Parser / Semantic analysis"]
+    D --> F["Preprocessor / Module graph"]
+    F --> E["Lexer"]
+    F -. pending .-> I["Parser / Semantic analysis"]
     D -. pending .-> G["IR / Optimizer / Code generation / Linker"]
     B -. planned .-> H["Runtime / Package manager / Debugger"]
 ```
@@ -129,9 +132,12 @@ ctest --test-dir build --output-on-failure
 A C++23 toolchain with `<format>` support and CMake 3.20+ are required. Python 3
 is optional for integration tests. Both `optic` and `opticc` install into `bin`.
 
-`debug` currently prints compiler configuration and lexical tokens. `build` and
+`debug` prints compiler configuration, module dependencies and preprocessed tokens. `build` and
 `run` fail explicitly after frontend analysis because code generation and the
 runtime are pending. Package commands are also unimplemented.
+
+See [preprocessing and module ownership](docs/preprocessor.md) for import syntax,
+source locations and the parser integration contract.
 
 See [CLI architecture and migration](docs/cli.md) for the component contract,
 compiler discovery, exit statuses, per-file changes and platform limitations.

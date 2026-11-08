@@ -12,7 +12,6 @@ function(optic_configure_target target)
     target_include_directories(${target} PRIVATE "${PROJECT_SOURCE_DIR}")
     target_compile_definitions(${target} PRIVATE
         OPTIC_VERSION="${PROJECT_VERSION}"
-        $<$<CONFIG:Debug>:OPTIC_DEBUG>
     )
     if(MSVC)
         target_compile_definitions(${target} PRIVATE _CRT_SECURE_NO_WARNINGS)
@@ -32,17 +31,21 @@ add_executable(opticc
     compiler/driver/diagnostics_engine.cpp
     compiler/driver/module.cpp
     compiler/lexer/lexer.cpp
-    compiler/lexer/trie_operators.cpp
     compiler/preprocessor/preprocessor.cpp
 )
 optic_configure_target(opticc)
-target_include_directories(opticc PRIVATE "${PROJECT_SOURCE_DIR}/c_compat/headers")
 
 install(TARGETS optic opticc RUNTIME DESTINATION bin)
 
 # Optional Python integration checks exercise real process/argument boundaries.
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(optic_frontend_tests tests/frontend.cpp
+        compiler/driver/module.cpp compiler/driver/diagnostics_engine.cpp
+        compiler/lexer/lexer.cpp)
+    optic_configure_target(optic_frontend_tests)
+    add_test(NAME frontend COMMAND optic_frontend_tests)
+    set_tests_properties(frontend PROPERTIES TIMEOUT 30)
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
         add_executable(optic_test_component tests/cli_component.cpp)
@@ -50,6 +53,8 @@ if(BUILD_TESTING)
             "${PROJECT_SOURCE_DIR}/tests/cli_integration.py"
             "$<TARGET_FILE:optic>" "$<TARGET_FILE:opticc>"
             "$<TARGET_FILE:optic_test_component>")
-        set_tests_properties(cli_integration PROPERTIES TIMEOUT 30)
+        add_test(NAME preprocessor_integration COMMAND "${Python3_EXECUTABLE}"
+            "${PROJECT_SOURCE_DIR}/tests/preprocessor_integration.py" "$<TARGET_FILE:opticc>")
+        set_tests_properties(cli_integration preprocessor_integration PROPERTIES TIMEOUT 60)
     endif()
 endif()

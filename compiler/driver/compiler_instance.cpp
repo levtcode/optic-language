@@ -13,83 +13,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include <format>
-#include <fstream>
-#include <iterator>
-#include <memory>
+#include <iostream>
 #include <string>
 #include <utility>
 
 namespace optic::compiler::driver {
-
-/* */
-bool get_data(const std::string fname, std::string& dest, DiagnosticsEngine& diagnostic_engine) noexcept {
-    const SourceLocation srcloc(
-        SourceKind::Stdin,
-        "",
-        "",
-        0,
-        0
-    );
-
-    try {
-        std::ifstream file(fname, std::ios::binary);
-
-        if (!file) {
-            diagnostic_engine.report(
-                srcloc,
-                std::format(
-                    "Error: Cannot open file '{}'.\n",
-                    fname
-                ),
-                "Solution: Verify that the file exists and that "
-                "the compiler has permission to access it.\n",
-                "",
-                DiagnosticsLevel::Error
-            );
-
-            return false;
-        }
-
-        std::string buffer(
-            std::istreambuf_iterator<char>{file},
-            std::istreambuf_iterator<char>{}
-        );
-
-        if (file.bad()) {
-            diagnostic_engine.report(
-                srcloc,
-                std::format(
-                    "Error: Failed to read file '{}'.\n",
-                    fname
-                ),
-                "Solution: Verify that the file is accessible "
-                "and that no IO error occurred.\n",
-                "",
-                DiagnosticsLevel::Error
-            );
-
-            return false;
-        }
-
-        dest = std::move(buffer);
-
-        return true;
-    }
-    catch (...) {
-        diagnostic_engine.report(
-            srcloc,
-            std::format(
-                "Error: An exception occurred while reading '{}'.\n",
-                fname
-            ),
-            "",
-            "",
-            DiagnosticsLevel::Error
-        );
-
-        return false;
-    }
-}
 
 void CompilerInstance::call_usage(bool help_manual) noexcept {
     (void)help_manual;
@@ -97,7 +25,7 @@ void CompilerInstance::call_usage(bool help_manual) noexcept {
         "Usage: opticc <build|run|debug> [options] <files.optic>\n\n"
         "  build    Analyze sources; native code generation is not implemented.\n"
         "  run      Analyze sources; bytecode generation/runtime are not implemented.\n"
-        "  debug    Print compiler configuration and tokens (frontend inspection).\n\n"
+        "  debug    Print compiler configuration, dependencies and preprocessed tokens.\n\n"
         "  --color-diagnostics=auto|enable|disable\n"
         "  -Wall    Enable all warnings in diagnostic configuration.\n"
         "  -g       Record the debug-information flag (backend pending).\n"
@@ -313,82 +241,25 @@ void CompilerInstance::cli_tooling(int argc, char** argv) noexcept {
     }
 }
 
-/* */
-void CompilerInstance::lexing() noexcept {
-    auto& config       = compiler_context.config();
-    auto& diagnostics  = compiler_context.diagnostics();
-    auto& module_graph = compiler_context.modules();
-
-    const SourceLocation srcloc(
-        SourceKind::Stdin,
-        "",
-        "",
-        0,
-        0
-    );
-
-    if (config.mode == CompilerMode::Debug) {
-        std::printf(
-            "\n----- PRINTING TOKENS -----\n\n"
-        );
-    }
-
-    for (const std::string& fname : config.input_files) {
-
-        if (!fname.ends_with(OPTIC_EXTENSION)) {
-            diagnostics.report(
-                srcloc,
-                std::format(
-                    "Error: '{}' is not a valid Optic source file.\n",
-                    fname
-                ),
-                std::format(
-                    "Solution: Optic source files must use '{}'.\n",
-                    OPTIC_EXTENSION
-                ),
-                "",
-                DiagnosticsLevel::Error
-            );
-
-            continue;
-        }
-
-        try {
-            auto module = std::make_unique<Module>(fname);
-            std::string buffer;
-
-            if (!get_data(fname, buffer, diagnostics)) continue;
-
-            module->set_buffer(std::move(buffer));
-
-            lexer::Lexer lexer(module.get(), &diagnostics);
-
-            lexer.tokenize(module->get_tokens());
-
-            if (config.mode == CompilerMode::Debug) {
-                lexer.print_tokens(*module);
-            }
-
-            module_graph.add_module(std::move(module));
-        }
-        catch (...) {
-            diagnostics.report(
-                srcloc,
-                std::format(
-                    "Error: Failed to process module '{}'.\n",
-                    fname
-                ),
-                "",
-                "",
-                DiagnosticsLevel::Error
-            );
-        }
-    }
-}
-
-/* */
 void CompilerInstance::preprocess() noexcept {
-    // TODO
+    auto& config = compiler_context.config();
+    try {
+        preprocessor::Preprocessor preprocessor(compiler_context);
+        if (!preprocessor.run(config.input_files)) return;
+        if (config.mode == CompilerMode::Debug) {
+            auto& modules = compiler_context.modules();
+            modules.print(std::cout);
+            std::cout << "\n----- PRINTING PREPROCESSED TOKENS -----\n\n";
+            for (const auto id : modules.compilation_order()) {
+                const auto& module = *modules.get_module(id);
+                lexer::Lexer::print_tokens(module);
+            }
+        }
+    } catch (const std::exception& exception) {
+        compiler_context.diagnostics().report({},
+            std::string("Error: Frontend preprocessing failed: ") + exception.what(),
+            "", "", DiagnosticsLevel::Error);
+    }
 }
 
 /* */
@@ -454,13 +325,12 @@ int CompilerInstance::run(int argc, char *argv[], CompilerMode mode) noexcept {
     if (mode == CompilerMode::Debug) {
         optic::compiler::driver::print_args(compiler_context.config());
     }
-    lexing();
     preprocess();
-    parsing();
-    semantic_analize();
-    optimize();
-    linking();
-    code_generation();
+    if (!diagnostics.has_errors()) parsing();
+    if (!diagnostics.has_errors()) semantic_analize();
+    if (!diagnostics.has_errors()) optimize();
+    if (!diagnostics.has_errors()) code_generation();
+    if (!diagnostics.has_errors()) linking();
 
     if (diagnostics.get_config().guide_engine) {
         diagnostics.run_guide_engine();

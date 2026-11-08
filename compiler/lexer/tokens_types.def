@@ -77,6 +77,7 @@ X(GreaterEqual)
 X(Import)
 X(Directive)
 X(Macro)
+X(CompileTime)
 
 // ===== Keywords =====
 X(Asm)
@@ -102,8 +103,15 @@ X(Struct)
 X(Class)
 X(Lambda)
 
+// ===== Literal values (distinct from type keywords) =====
+X(IntegerLiteral)
+X(FloatLiteral)
+X(StringLiteral)
+X(CharLiteral)
+
 // ===== Special =====
 X(LiteralTrue)
 X(LiteralFalse)
 X(FString)
+X(RawString)
 X(EndOfFile)
