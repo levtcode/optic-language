@@ -1,434 +1,210 @@
-/**
- * @file lexer.cpp
- * @brief Implementation of Optic's lexical analyzer.
- *
- * The lexer performs the first stage of the frontend, transforming the source
- * code into a stream of tokens while preserving source locations for accurate
- * diagnostics. Token recognition is delegated to specialized readers for each
- * lexical category (identifiers, literals, operators, comments, etc.).
- *
- * @todo Multiline string literals.
- * @todo Unicode escape sequences.
- * @todo Fill the '// Error' lines
+/** @file lexer.cpp
+ * @brief Token recognition without cursor rollback or loss of source positions.
  */
-
 #include "compiler/lexer/lexer.hpp"
 #include "compiler/lexer/tables.hpp"
-#include "compiler/lexer/trie_operators.hpp"
+#include <cctype>
+#include <cstdio>
 #include <iostream>
 
 namespace optic::compiler::lexer {
-
-inline bool is_octal(int c) noexcept { return (c >= '0' && c <= '7'); }
-
-inline bool is_numeric(int c) noexcept {
-    return (isdigit(c) || (c == '.') || 
-            (c == 'e') || (c == 'E'));
+namespace {
+bool alpha(int c) { return c != EOF && (std::isalpha(c) || c == '_'); }
+bool digit(int c) { return c >= '0' && c <= '9'; }
+int hex(int c) {
+    if (digit(c)) return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
 }
-
-inline bool Lexer::is_symbol(const int c) const noexcept {
-    return ((c == '(') || (c == ')') ||
-            (c == '{') || (c == '}') ||
-            (c == '[') || (c == ']') ||
-            (c == ';') || (c == ':') ||
-            (c == ',') || (c == '.'));
-}
-
-inline bool Lexer::is_operator(const int c) const noexcept {
-    return ((c == '=') || (c == '+') || (c == '-') ||
-            (c == '*') || (c == '%') || (c == '&') ||
-            (c == '|') || (c == '~') || (c == '^') ||
-            (c == '<') || (c == '>') || (c == '!'));
-}
-
-char Lexer::read_escape(int c) const noexcept {
-    switch (c) {
-        case 'a': return '\a';
-        case 'b': return '\b';
-        case 't': return '\t';
-        case 'n': return '\n';
-        case 'f': return '\f';
-        case 'r': return '\r';
-        case '"': return '\"';
-        case '\'': return '\'';
-        default: return c;
+void utf8(std::string& value, unsigned code) {
+    if (code <= 0x7f) value += static_cast<char>(code);
+    else if (code <= 0x7ff) {
+        value += static_cast<char>(0xc0 | (code >> 6));
+        value += static_cast<char>(0x80 | (code & 0x3f));
+    } else if (code <= 0xffff) {
+        value += static_cast<char>(0xe0 | (code >> 12));
+        value += static_cast<char>(0x80 | ((code >> 6) & 0x3f));
+        value += static_cast<char>(0x80 | (code & 0x3f));
+    } else {
+        value += static_cast<char>(0xf0 | (code >> 18));
+        value += static_cast<char>(0x80 | ((code >> 12) & 0x3f));
+        value += static_cast<char>(0x80 | ((code >> 6) & 0x3f));
+        value += static_cast<char>(0x80 | (code & 0x3f));
     }
 }
-
-
-/**
- * @brief Decodes an octal escape sequence.
- *
- * Assumes the lexer is positioned at the first octal digit immediately after
- * the backslash. Consumes the complete sequence, converts it to its byte value
- * and appends the decoded character to the destination string.
- *
- * @param str Destination string receiving the decoded character.
- */
-void Lexer::read_octal_escape(std::string &str) noexcept {
-    std::string tmp_buf;
-    int n, c = get();
-
-    do {
-        tmp_buf += c;
-    } while ((c = get()) != EOF && is_octal(c));
-    --pos;
-
-    if ((n = std::stoi(tmp_buf, nullptr, 8)) > 255) {
-        // Error
-    }
-
-    str += n;
 }
-
-/**
- * @brief Decodes a hexadecimal escape sequence.
- *
- * Assumes the lexer has already consumed the '\x' introducer and is positioned
- * at the first hexadecimal digit. The resulting byte is appended to the output
- * string.
- *
- * @param str Destination string receiving the decoded character.
- */
-void Lexer::read_hexadecimal_escape(std::string &str) noexcept {
-    std::string tmp_buf;
-    short int n, c = get();
-
-    do {
-        tmp_buf += c;
-    } while ((c = get()) != EOF && isxdigit(c));
-    --pos;
-
-    if ((n = std::stoi(tmp_buf, nullptr, 16)) > 255) {
-        // Error
-    }
-
-   str += n;
+int Lexer::peek(std::size_t offset) const noexcept {
+    const auto source = module.get_buffer();
+    return offset < source.size() - pos ? static_cast<unsigned char>(source[pos + offset]) : EOF;
 }
-
-
-/**
- * @brief Reads an identifier or reserved keyword.
- *
- * Consumes an identifier according to Optic's lexical grammar and performs a
- * keyword lookup before producing the final token. Reserved words are emitted
- * using their dedicated token types; otherwise an Identifier token is returned.
- */
-token_t Lexer::read_identifier() noexcept {
+int Lexer::get() noexcept {
+    const int c = peek();
+    if (c == EOF) return c;
+    ++pos;
+    if (c == '\n') { ++location.line; location.column = 1; }
+    else ++location.column;
+    return c;
+}
+void Lexer::error(const driver::SourceLocation& loc, const std::string& message) {
+    diagnostic_engine.report(loc, "Error: " + message, "", "", driver::DiagnosticsLevel::Error);
+}
+token_t Lexer::read_identifier() {
+    const auto loc = location;
     std::string word;
-    size_t _start_col = module->loc().column;
-    int c = get();
-
-    do {
-        word += c;
-        
-    } while ((c = get()) != EOF && (isalnum(c) || c == '_'));
-    if (c != EOF) --pos;
-
-    if (keyword_table.find(word) != keyword_table.end()) return token_t(keyword_table.at(word), word, module->loc().line, _start_col);
-    return token_t(TokenType::Identifier, word, module->loc().line, _start_col);
+    while (alpha(peek()) || digit(peek())) word += static_cast<char>(get());
+    const auto it = keyword_table.find(word);
+    return {it == keyword_table.end() ? TokenType::Identifier : it->second, word, loc.line, loc.column};
 }
-
-
-/**
- * @brief Reads a quoted string literal.
- *
- * Supports standard escape sequences together with octal and hexadecimal
- * escapes. If the closing quote is not found before reaching EOF, a diagnostic
- * is emitted and tokenization continues.
- *
- * @note Future extensions:
- *       - Unicode escapes.
- *       - Multiline strings.
- */
-token_t Lexer::read_string() noexcept {
-    std::string str;
-    size_t _start_col = module->loc().column;
-    int quote = get(), tmp = get();
-
-    str += tmp;
-    module->loc().column += 2;
-
-    while ((tmp = get()) != EOF && tmp != quote) {
-        if (tmp == '\\') {
-            tmp = get();
-
-            if (is_octal(tmp)) {
-                --pos;
-                read_octal_escape(str);
-                continue;
-            }
-
-            if (tmp == 'x') {
-                read_hexadecimal_escape(str);
-                continue;
-            }
-
-            if (tmp == 'u' || tmp == 'U') {
-                // TODO
-                continue;
-            }
-
-            else {
-                str += read_escape(tmp);
-                module->loc().column += 2;
-                continue;
-            }
+token_t Lexer::read_number() {
+    const auto loc = location;
+    std::string value;
+    bool floating = false;
+    while (digit(peek())) value += static_cast<char>(get());
+    if (peek() == '.' && digit(peek(1))) {
+        floating = true;
+        value += static_cast<char>(get());
+        while (digit(peek())) value += static_cast<char>(get());
+    }
+    if (peek() == 'e' || peek() == 'E') {
+        const auto offset = (peek(1) == '+' || peek(1) == '-') ? 2u : 1u;
+        if (digit(peek(offset))) {
+            floating = true;
+            value += static_cast<char>(get());
+            if (peek() == '+' || peek() == '-') value += static_cast<char>(get());
+            while (digit(peek())) value += static_cast<char>(get());
         }
-
-        str += tmp;
     }
-   
-    if (tmp != quote) {
-        diagnostic_engine->report(
-            module->loc(),
-            "Error: String not closed",
-            "Solution: Close the string, append '\"' to the end of the string. Example: \"Hello World\" <- here\n",
-            "More information: <...>",
-            driver::DiagnosticsLevel::Error
-        );
-    }
-
-    return token_t(TokenType::String, str, module->loc().line, _start_col);
+    return {floating ? TokenType::FloatLiteral : TokenType::IntegerLiteral, value, loc.line, loc.column};
 }
-
-
-/**
- * @brief Reads a numeric literal.
- *
- * Supports integer literals, decimal floating-point literals and scientific
- * notation. Invalid exponent suffixes are rolled back so the numeric token
- * ends before the malformed exponent.
- */
-token_t Lexer::read_number() noexcept {
-    std::string number;
-    size_t _start_col = (module->loc().column > 0) ? (module->loc().column - 1) : 0;
-    bool has_dot = false;
-    bool has_exponent = false;
-    bool is_float = false;
-
-    int c = get();
-    if (c == EOF) {
-        return token_t(TokenType::Int, "", module->loc().line, _start_col);
-    }
-
-    number += c;
-
-    while (true) {
-        int next = peek();
-
-        if (isdigit(next)) {
-            number += static_cast<char>(get());
-            continue;
+token_t Lexer::read_string(bool raw) {
+    const auto loc = location;
+    const auto quote = get();
+    std::string value;
+    while (peek() != EOF && peek() != quote) {
+        if (peek() == '\n' || peek() == '\r') {
+            error(loc, "String not closed before end of line.");
+            return {quote == '\'' ? TokenType::CharLiteral : TokenType::StringLiteral, value, loc.line, loc.column};
         }
-
-        if (!has_dot && !has_exponent && next == '.') {
-            has_dot = true;
-            is_float = true;
-            number += static_cast<char>(get());
-            continue;
+        int c = get();
+        if (c != '\\' || raw) { value += static_cast<char>(c); continue; }
+        const auto escape_loc = location;
+        if (peek() == '\n' || peek() == '\r') {
+            error(loc, "String not closed before end of line.");
+            return {quote == '\'' ? TokenType::CharLiteral : TokenType::StringLiteral, value, loc.line, loc.column};
         }
-
-        if (!has_exponent && (next == 'e' || next == 'E')) {
-            size_t exponent_pos = pos;
-            unsigned consumed_chars = 1;
-            int exponent_char = get();
-            number += static_cast<char>(exponent_char);
-
-            int exponent_next = peek();
-            if (exponent_next == '+' || exponent_next == '-') {
-                consumed_chars++;
-                exponent_next = get();
-                number += static_cast<char>(exponent_next);
-            }
-
-            if (!isdigit(peek())) {
-                pos = exponent_pos;
-                module->loc().column -= consumed_chars;
+        c = get();
+        if (c == EOF) break;
+        switch (c) {
+            case 'a': value += '\a'; break;
+            case 'b': value += '\b'; break;
+            case 't': value += '\t'; break;
+            case 'n': value += '\n'; break;
+            case 'v': value += '\v'; break;
+            case 'f': value += '\f'; break;
+            case 'r': value += '\r'; break;
+            case '\\': value += '\\'; break;
+            case '\'': value += '\''; break;
+            case '"': value += '"'; break;
+            case 'x': case 'u': case 'U': {
+                const unsigned width = c == 'x' ? 2 : c == 'u' ? 4 : 8;
+                unsigned code = 0, count = 0;
+                while (count < width && hex(peek()) >= 0) {
+                    code = code * 16 + hex(get());
+                    ++count;
+                }
+                if ((c == 'x' && count == 0) || (c != 'x' && count != width)) {
+                    error(escape_loc, "Invalid hexadecimal or Unicode escape.");
+                } else if (c == 'x') value += static_cast<char>(code);
+                else if (code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff))
+                    error(escape_loc, "Invalid Unicode scalar value.");
+                else utf8(value, code);
                 break;
             }
-
-            has_exponent = true;
-            is_float = true;
-            continue;
+            default:
+                if (c >= '0' && c <= '7') {
+                    unsigned code = c - '0';
+                    for (int n = 1; n < 3 && peek() >= '0' && peek() <= '7'; ++n)
+                        code = code * 8 + get() - '0';
+                    if (code > 255) error(escape_loc, "Octal escape exceeds one byte.");
+                    else value += static_cast<char>(code);
+                } else error(escape_loc, "Unknown string escape.");
         }
-
-        break;
     }
-
-    return token_t(is_float ? TokenType::Float : TokenType::Int, number, module->loc().line, _start_col);
+    if (peek() == quote) get();
+    else error(loc, "String not closed.");
+    return {quote == '\'' ? TokenType::CharLiteral : TokenType::StringLiteral, value, loc.line, loc.column};
 }
-
-
-/**
- * @brief Reads the longest valid operator beginning at the current position.
- *
- * Operators are recognized using a trie, allowing the lexer to efficiently
- * implement the longest-match rule (e.g. ">>=" is preferred over ">>" or ">").
- */
-token_t Lexer::read_operator() noexcept {
-    int c;
-    size_t _start_col = module->loc().column;
-
-    std::string current;
-    std::string longest_match;
-
-    while ((c = get()) != EOF) {
-        current += c;
-
-        if (!TrieNode::is_prefix(current, operator_table))
-            break;
-
-        if (TrieNode::search(current, trie_root))
-            longest_match = current;
+token_t Lexer::read_operator() {
+    const auto loc = location;
+    const auto remaining = module.get_buffer().substr(pos);
+    std::string_view longest;
+    TokenType type = TokenType::EndOfFile;
+    for (const auto& [spelling, candidate] : operator_table) {
+        if (spelling.size() > longest.size() && remaining.starts_with(spelling)) {
+            longest = spelling;
+            type = candidate;
+        }
     }
-
-    if (c != EOF) --pos;
-
-    return token_t(operator_table.at(longest_match), longest_match, module->loc().line, _start_col);
+    if (longest.empty()) {
+        error(loc, "Unrecognized operator.");
+        return {TokenType::EndOfFile, std::string(1, static_cast<char>(get())), loc.line, loc.column};
+    }
+    for (std::size_t i = 0; i < longest.size(); ++i) get();
+    return {type, std::string(longest), loc.line, loc.column};
 }
-
-/**
- * @brief Consumes a source code comment.
- *
- * Supports both single-line and block comments.
- * Unterminated block comments produce a diagnostic before reaching EOF.
- */
-void Lexer::ignore_comment() noexcept {
-    int c = get();
-
-    if (c == '*') {
-        while ((c = get()) != EOF) {
-            if (c == '*') {
-                if (peek() == '/') {
-                    get();
-                    return;
-                }
-            }
-        }
-
-        diagnostic_engine->report(
-            module->loc(),
-            "Error: Block comment not closed, '*/' expected",
-            "Solution: Append '*/' to the end of the block comment. Example: /* This is a block comment */ <- here\n",
-            "More information: <...>",
-            driver::DiagnosticsLevel::Error
-        );
+void Lexer::ignore_comment() {
+    const auto loc = location;
+    get();
+    const int kind = get();
+    if (kind == '/') {
+        while (peek() != EOF && peek() != '\n') get();
+        return;
     }
-
-    else {
-        while ((c = get()) != EOF && c != '\n');
+    while (peek() != EOF) {
+        if (get() == '*' && peek() == '/') { get(); return; }
     }
+    error(loc, "Block comment not closed, '*/' expected.");
 }
-
-
-/**
- * @brief Performs lexical analysis over the entire source module.
- *
- * Repeatedly dispatches to specialized token readers, skips whitespace and
- * comments, emits lexical diagnostics when necessary and appends an explicit
- * EndOfFile token to terminate the token stream.
- *
- * @note This function constitutes the main entry point of the lexer.
- */
-void Lexer::tokenize(std::vector<token_t> &tokens) noexcept {
-    trie_root = TrieNode::init(operator_table);
-    int c;
-
-    while ((c = get()) != EOF) {
-        if (c == ' ' || c == '\t' || c == '\n') {
-            continue;
-        }
-
-        if (is_symbol(c)) {
-            tokens.emplace_back(
-                symbol_table.at(c),
-                std::string(1, static_cast<char>(c)),
-                module->loc().line,
-                module->loc().column
-            );
-            continue;
-        }
-
-        if (c == '\'' || c == '"') {
-            --pos;
-            tokens.emplace_back(read_string());
-            continue;
-        }
-
-        if (c == '/') {
-            if (peek() == '/' || peek() == '*') {
-                ignore_comment();
-                continue;
-            } else {
-                tokens.emplace_back(TokenType::Slash, "/", module->loc().line, module->loc().column);
-                continue;
-            }
-        }
-   
-        if (is_operator(c)) {
-            if (c == '+' || c == '-') {
-                if (isdigit(peek())) {
-                    --pos;
-                    tokens.emplace_back(read_number());
-                    continue;
-                }
-            }
-           
-            --pos;
-            tokens.emplace_back(read_operator());
-            continue;
-        }
-
-        if (isdigit(c)) {
-            --pos;
-            tokens.emplace_back(read_number());
-            continue;
-        }
-
-        if (isalpha(c) || c == '_') {
-            if ((c == 'f' || c == 'r') && peek() == '"') {
-                tokens.emplace_back(
-                    (c == 'f' ? TokenType::FString : TokenType::RawString),
-                    (c == 'f' ? "f" : "r"),
-                    module->loc().line, module->loc().column
-                ); 
-                continue;
-            }
-
-            --pos;
-            tokens.emplace_back(read_identifier());
-            continue;
-        }
+void Lexer::tokenize(std::vector<token_t>& tokens) {
+    pos = 0;
+    location = {driver::SourceKind::BufferNoAST, module.get_path(), "", 1, 1};
+    tokens.clear();
+    while (peek() != EOF) {
+        const auto loc = location;
+        const auto c = peek();
+        if (std::isspace(c)) { get(); continue; }
+        if (c == '/' && (peek(1) == '/' || peek(1) == '*')) { ignore_comment(); continue; }
+        if ((c == 'r' || c == 'f') && peek(1) == '"') {
+            get();
+            tokens.emplace_back(c == 'r' ? TokenType::RawString : TokenType::FString,
+                                std::string(1, static_cast<char>(c)), loc.line, loc.column);
+            tokens.push_back(read_string(c == 'r'));
+        } else if (alpha(c)) tokens.push_back(read_identifier());
+        else if (digit(c)) tokens.push_back(read_number());
+        else if (c == '"' || c == '\'') tokens.push_back(read_string());
+        else if (const auto it = symbol_table.find(c); it != symbol_table.end()) {
+            tokens.emplace_back(it->second, std::string(1, static_cast<char>(get())), loc.line, loc.column);
+        } else if (std::string_view("=+-*/%&|~^<>!").find(static_cast<char>(c)) != std::string_view::npos)
+            tokens.push_back(read_operator());
+        else { error(loc, "Unexpected character in source."); get(); }
     }
-
-    tokens.emplace_back(TokenType::EndOfFile, "EOF", module->loc().line, module->loc().column);
-    TrieNode::destroy(trie_root);
+    tokens.emplace_back(TokenType::EndOfFile, "EOF", location.line, location.column);
 }
-
-
-/**
- * Converts a TokenType enum value to its corresponding string representation for debugging.
- *
- * @param type The TokenType enum value.
- * @return C-string representing the identifier of the token type.
- */
-const char *to_string_token(const TokenType type) {
+const char* to_string_token(TokenType type) {
     switch (type) {
 #define X(name) case TokenType::name: return #name;
 #include "tokens_types.def"
 #undef X
-        default: return "Unknown";
+    }
+    return "Unknown";
+}
+void Lexer::print_tokens(const driver::Module& source) {
+    for (const auto& token : source.get_tokens()) {
+        std::cout << "Token type: " << to_string_token(token.type) << "\n"
+                  << "Token value: '" << token.value << "'\n"
+                  << "At line: " << token.line << ", in column: " << token.column << "\n"
+                  << "In file: " << source.get_path() << "\n\n";
     }
 }
-
-void Lexer::print_tokens(driver::Module &module) noexcept {
-    for (auto &token : module.get_tokens()) {
-        std::cout << "Token type: " << to_string_token(token.type) << "\n";
-        std::cout << "Token value: '" << token.value << "'\n";
-        std::cout << "At line: " << token.line << ", in column: " << token.column << "\n";
-        std::cout << "In file: " << module.get_path() << "\n\n";
-    }
-}
-
 } // namespace optic::compiler::lexer

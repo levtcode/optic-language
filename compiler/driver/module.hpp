@@ -1,118 +1,72 @@
-/**
- * @file module.hpp
- * @brief Source modules and their dependency graph.
- *
- * C++ declarations and definitions belong to namespace optic::compiler::driver.
+/** @file module.hpp
+ * @brief Source ownership and the dependency graph shared by frontend phases.
  */
-
 #pragma once
 
 #include "compiler/driver/diagnostics_engine.hpp"
 #include "compiler/lexer/tokens.hpp"
 #include <cstdint>
 #include <filesystem>
+#include <map>
+#include <iosfwd>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_map>
-#include <utility>
 #include <vector>
 
 namespace optic::compiler::driver {
-
 using ModuleID = std::uint32_t;
-
-constexpr        std::string_view OPTIC_EXTENSION = ".optic";
 inline constexpr ModuleID invalid_module_id = 0;
+inline constexpr std::string_view OPTIC_EXTENSION = ".optic";
 
-/// There is a semantic difference between an Optic's file and an Optic's module.
+enum class ModuleState { Loaded, Processing, Ready, Failed };
 
-/// Optic's file is just an IO buffer, but Optic's module is a conceptual object that represents
-/// an Optic's source code, with dependencies, source location and his buffer.
-
-
+/// Owns the original source and the parser's token stream. Imports never concatenate sources.
 class Module {
-private:
-    std::filesystem::path path;
-    std::string           buffer;
-    SourceLocation        module_location;
-    std::vector<lexer::token_t>  tokens;
-    std::vector<ModuleID> dependencies;
-
 public:
-    explicit Module(std::string path)
-        : path(std::move(path)) {}
-
+    explicit Module(std::string path);
     Module(const Module&) = delete;
     Module& operator=(const Module&) = delete;
 
-    Module(Module&&) = delete;
-    Module& operator=(Module&&) = delete;
-
-    ~Module() = default;
-
-    std::string get_path() const noexcept {
-        return path.generic_string();
-    }
-
-    std::string_view get_buffer() const noexcept {
-        return buffer;
-    }
-
-    SourceLocation& loc() noexcept {
-        return module_location;
-    }
-
-    const SourceLocation& loc() const noexcept {
-        return module_location;
-    }
-
-    std::vector<lexer::token_t>& get_tokens() noexcept {
-        return tokens;
-    }
-
-    const std::vector<lexer::token_t>& get_tokens() const noexcept {
-        return tokens;
-    }
-
-    const std::vector<ModuleID>&
-    get_dependencies() const noexcept {
-        return dependencies;
-    }
-
-    void set_buffer(std::string buffer) {
-        this->buffer = std::move(buffer);
-    }
-
-    void add_dependency(const ModuleID &dependency) {
-        dependencies.push_back(std::move(dependency));
-    }
-};
-
-class ModuleGraph {
-public:
-    ModuleID add_module(std::unique_ptr<Module> module);
-
-    [[nodiscard]]
-    Module* get_module(ModuleID id) noexcept;
-
-    bool add_dependency(ModuleID module, ModuleID dependency);
-
-    [[nodiscard]]
-    const std::vector<ModuleID>&
-    compilation_order() const noexcept {
-        return ordered_modules;
-    }
-
-    [[nodiscard]]
-    std::size_t size() const noexcept {
-        return modules.size();
-    }
+    std::string get_path() const { return path.generic_string(); }
+    std::string_view get_buffer() const noexcept { return buffer; }
+    std::vector<lexer::token_t>& get_tokens() noexcept { return tokens; }
+    const std::vector<lexer::token_t>& get_tokens() const noexcept { return tokens; }
+    const std::vector<ModuleID>& get_dependencies() const noexcept { return dependencies; }
+    void set_buffer(std::string value) { buffer = std::move(value); }
+    ModuleState state() const noexcept { return processing_state; }
+    void set_state(ModuleState value) noexcept { processing_state = value; }
 
 private:
-    std::unordered_map<ModuleID, std::unique_ptr<Module>> modules;
+    friend class ModuleGraph;
+    std::filesystem::path path;
+    std::string buffer;
+    std::vector<lexer::token_t> tokens;
+    std::vector<ModuleID> dependencies;
+    ModuleState processing_state = ModuleState::Loaded;
+};
+
+/// Stable module IDs and canonical paths; insertion order breaks ties deterministically.
+class ModuleGraph {
+public:
+    static std::string path_key(const std::filesystem::path& path);
+    ModuleID add_module(std::unique_ptr<Module> module);
+    ModuleID find_module(const std::filesystem::path& path) const;
+    Module* get_module(ModuleID id) noexcept;
+    const Module* get_module(ModuleID id) const noexcept;
+    /// Reject invalid IDs and cycles without modifying the graph. Duplicate edges are harmless.
+    bool add_dependency(ModuleID module, ModuleID dependency);
+    /// Rebuild dependency-first order. On failure the order is empty.
+    bool topological_sort();
+    const std::vector<ModuleID>& compilation_order() const noexcept { return ordered_modules; }
+    std::size_t size() const noexcept { return modules.size(); }
+    void print(std::ostream& out) const;
+
+private:
+    std::map<ModuleID, std::unique_ptr<Module>> modules;
+    std::unordered_map<std::string, ModuleID> path_ids;
     std::vector<ModuleID> ordered_modules;
     ModuleID next_id = 1;
 };
-
 } // namespace optic::compiler::driver

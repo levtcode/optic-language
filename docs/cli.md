@@ -25,6 +25,11 @@ and `-C Debug` for CTest. `cmake --build build --target optic` builds only the
 coordinator; `--target opticc` builds only the compiler. Disable test targets
 with `-DBUILD_TESTING=OFF`.
 
+`optic_frontend` is an internal static library shared by the compiler and C++
+contract tests. The coordinator does not link it. This library does not implement
+the future runtime-language parser; macro functions have a private preprocessing
+grammar.
+
 Both tools install into `bin/`. When running directly from a build directory,
 they also sit beside each other (in the configuration directory where applicable).
 
@@ -36,7 +41,7 @@ they also sit beside each other (in the configuration directory where applicable
 | `optic --version` | Print the coordinator version. |
 | `optic build <files>` | Delegate to `opticc build`; analyze sources, then report missing native code generation and fail. |
 | `optic run <files>` | Delegate to `opticc run`; analyze sources, then report missing bytecode generation/runtime and fail. |
-| `optic debug <files>` | Delegate to `opticc debug`; print compiler configuration and tokens. This is frontend inspection, not source-level debugging. |
+| `optic debug <files>` | Delegate to `opticc debug`; print compiler configuration, dependencies and preprocessed tokens. This is frontend inspection, not source-level debugging. |
 | `optic install`, `optic uninstall`, `optic test` | Report that the command is not implemented and fail. |
 
 `optic` without a command prints usage and returns 2. Unknown commands return 2.
@@ -101,7 +106,7 @@ subsystems nested under `optic::compiler`:
 | `optic::cli` | `CliTool`, component discovery and process execution. |
 | `optic::compiler::driver` | `CompilerInstance`, configuration, diagnostics, `Module`, `ModuleGraph` and compiler argument helpers. |
 | `optic::compiler::lexer` | `Lexer`, tokens, lookup tables and operator trie. |
-| `optic::compiler::preprocessor` | Experimental preprocessing and dependency graph. |
+| `optic::compiler::preprocessor` | Token preprocessing, import loading and typed macro evaluation. |
 
 Namespaces describe subsystems, not individual files. For example, `Module`
 belongs to the driver, so there is no `module` namespace. The future parser
@@ -124,12 +129,13 @@ list included inside the compiler implementation; it is not a standalone API.
 | `compiler/driver/compiler_instance.hpp`, `.cpp` | Compiler configuration and phase coordination; explicit argv contract, input checks and unavailable-backend errors. |
 | `compiler/driver/args.hpp`, `.cpp` | Compiler argument helpers; corrected option values, empty-input guards and double parsing. |
 | `compiler/driver/diagnostics_engine.hpp`, `.cpp` | Diagnostics under `optic::compiler::driver`; configuration setter connects parsed diagnostic options. |
-| `compiler/driver/module.hpp`, `.cpp` | Source modules and graph under `optic::compiler::driver`; existing behavior retained. |
+| `compiler/driver/module.hpp`, `.cpp` | Canonical source ownership, dependency edges and deterministic ordering. |
 | `compiler/lexer/lexer.hpp`, `.cpp` | Lexical analyzer under `optic::compiler::lexer`; system includes stay outside the namespace. |
 | `compiler/lexer/tables.hpp` | Lexical lookup tables under `optic::compiler::lexer`. |
 | `compiler/lexer/tokens.hpp` | Token types under `optic::compiler::lexer`. |
-| `compiler/lexer/trie_operators.hpp`, `.cpp` | Operator trie under `optic::compiler::lexer`. |
-| `compiler/preprocessor/preprocessor.hpp`, `.cpp` | Experimental preprocessor under `optic::compiler::preprocessor`; align `include_module` with the module-name string its caller supplies, fixing a pre-existing build error. |
+| `compiler/lexer/lexer.cpp` | Longest operator matching reads ahead without cursor rollback or a dynamically allocated trie. |
+| `compiler/preprocessor/preprocessor.hpp`, `.cpp` | Token preprocessing over the driver module graph; see [preprocessor documentation](preprocessor.md). |
+| `compiler/preprocessor/macro.hpp`, `.cpp` | Per-module macro environments, a private macro grammar, typed scalar evaluation and transactional expansion; see [macros](macros.md). |
 | `CMakeLists.txt` | Separate build/install targets and optional CTest integration. |
 | `tests/cli_component.cpp` | Executable fixture for argv, streams, exit codes and POSIX signals. |
 | `tests/cli_integration.py` | Integration checks using real processes and temporary directories. |
@@ -141,8 +147,10 @@ changes qualified C++ API names; downstream C++ callers must use the appropriate
 ## Future orchestration
 
 The parser, semantic analysis, optimization, linking and code-generation driver
-methods remain placeholders. The preprocessor is experimental and its driver
-phase is not connected. This migration does not implement these language phases.
+methods remain placeholders. Preprocessing is connected to the driver and resolves imports before the parser.
+The parser consumes each module separately in dependency order; it must retain
+module identity for diagnostics and symbol resolution. See
+[preprocessing and module ownership](preprocessor.md).
 
 When artifacts exist, build should generate a declared output path; run should
 compile bytecode and invoke a VM, or compile a native executable and launch it

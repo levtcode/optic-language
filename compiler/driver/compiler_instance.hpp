@@ -26,16 +26,10 @@ using ArgValue = std::variant<
     std::string
 >;
 
-using SourceFileID = std::uint32_t;
-inline constexpr SourceFileID invalid_source_file_id = 0;
-
-
-bool get_data(const std::string fname, std::string &dest, DiagnosticsEngine &diagnostic_engine) noexcept;
-
 enum class CompilerMode {
     Build,  // Request a native artifact (backend pending)
     Run,    // Request bytecode execution (backend/runtime pending)
-    Debug   // Inspect configuration and lexical tokens; no debugger
+    Debug   // Inspect configuration and preprocessed tokens; no debugger
 };
 
 /* */
@@ -87,34 +81,6 @@ struct CompilerConfig {
 };
 
 
-struct SourceFile {
-    SourceFileID id = invalid_source_file_id;
-    std::filesystem::path path;
-    std::string buffer;
-};
-
-class SourceManager {
-public:
-    SourceFileID load_file(const std::filesystem::path& path);
-    SourceFileID add_source(std::filesystem::path path, std::string buffer);
-
-    [[nodiscard]]
-    const SourceFile* get_file(SourceFileID id) const noexcept;
-
-    [[nodiscard]]
-    SourceFile* get_file(SourceFileID id) noexcept;
-
-    [[nodiscard]]
-    std::size_t size() const noexcept {
-        return source_files.size();
-    }
-
-private:
-    std::vector<SourceFile> source_files;
-    std::unordered_map<std::string, SourceFileID> file_ids;
-    SourceFileID next_id = 1;
-};
-
 class CompilerContext {
 public:
     CompilerContext() = default;
@@ -145,11 +111,6 @@ public:
     }
 
     [[nodiscard]]
-    SourceManager& sources() noexcept {
-        return source_manager;
-    }
-
-    [[nodiscard]]
     ModuleGraph& modules() noexcept {
         return module_graph;
     }
@@ -162,7 +123,6 @@ public:
 private:
     CompilerConfig    compiler_config;
     DiagnosticsEngine diagnostics_engine;
-    SourceManager     source_manager;
     ModuleGraph       module_graph;
     TargetMachineInfo target_info;
 };
@@ -173,7 +133,6 @@ private:
     void cli_tooling(
         int argc,
         char **argv)        noexcept;
-    void lexing()           noexcept;
     void preprocess()       noexcept;
     void parsing()          noexcept;
     void semantic_analize() noexcept;

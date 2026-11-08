@@ -40,6 +40,9 @@ const std::unordered_map<std::string_view, TokenType> operator_table = {
     { ">>=", TokenType::RShiftAssign },
     { "==", TokenType::EqualEqual },
     { "!=", TokenType::NotEqual },
+    { "&&", TokenType::And_C },
+    { "||", TokenType::Or_C },
+    { "!", TokenType::Not_C },
     { "<", TokenType::Less },
     { ">", TokenType::Greater },
     { "<=", TokenType::LessEqual },
@@ -49,10 +52,10 @@ const std::unordered_map<std::string_view, TokenType> operator_table = {
 
 const std::unordered_map<std::string_view, TokenType> keyword_table = {
     { "import", TokenType::Import },
-    { "directive", TokenType::Directive },
     { "macro", TokenType::Macro },
-    { "compiletime", TokenType::CompileTime },
     { "asm", TokenType::Asm },
+    { "new", TokenType::New },
+    { "delete", TokenType::Delete },
     { "if", TokenType::If },
     { "elif", TokenType::Elif },
     { "else", TokenType::Else },
@@ -101,7 +104,6 @@ const std::unordered_map<int, TokenType> symbol_table = {
     { ',', TokenType::Comma },
     { '.', TokenType::Point },
     { '?', TokenType::TernaryOp },
-    { 'f', TokenType::FString }
 };
 
 } // namespace optic::compiler::lexer

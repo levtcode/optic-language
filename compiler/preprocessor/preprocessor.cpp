@@ -1,316 +1,146 @@
-/**
- * @file preprocessor.cpp
- * @brief Experimental preprocessing and module dependency handling.
- *
- * C++ declarations and definitions belong to namespace optic::compiler::preprocessor.
+/** @file preprocessor.cpp
+ * @brief Module loading and token preprocessing with source-preserving imports.
  */
-
-#include "compiler/preprocessor/preprocessor.hpp"
-#include <iostream>
-#include <cstddef>
+#include "preprocessor.hpp"
+#include "compiler/driver/compiler_instance.hpp"
+#include "compiler/lexer/lexer.hpp"
+#include <fstream>
+#include <iterator>
 
 namespace optic::compiler::preprocessor {
+using namespace driver;
+using lexer::TokenType;
 
-// TO REFACTORIZE
-
-
-/* MUCH LATER: How 'compiletime' works
-
-compiletime {
-	// Add code here...
+void Preprocessor::error(const Module& module, const lexer::token_t& token, const std::string& message) {
+    context.diagnostics().report(
+        {SourceKind::BufferNoAST, module.get_path(), "", token.line, token.column},
+        "Error: " + message, "", "", DiagnosticsLevel::Error);
 }
 
-*/
-
-/* MUCH LATER: How 'macro' syntax will be
-
-macro MyMacro {
-	value = -1
+ModuleID Preprocessor::load(const std::filesystem::path& path, const SourceLocation& loc) {
+    auto& graph = context.modules();
+    if (const auto existing = graph.find_module(path); existing != invalid_module_id) return existing;
+    auto fail = [&](const std::string& message) {
+        context.diagnostics().report(loc, "Error: " + message, "", "", DiagnosticsLevel::Error);
+        return invalid_module_id;
+    };
+    if (path.extension() != OPTIC_EXTENSION)
+        return fail("'" + path.generic_string() + "' is not a valid Optic source file; expected '.optic'.");
+    std::error_code status_error;
+    if (!std::filesystem::is_regular_file(path, status_error))
+        return fail("Cannot open module '" + path.generic_string() + "': expected a regular source file.");
+    std::ifstream file(path, std::ios::binary);
+    if (!file) return fail("Cannot open module '" + path.generic_string() + "'.");
+    std::string buffer{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+    if (file.bad()) return fail("Cannot read module '" + path.generic_string() + "'.");
+    auto module = std::make_unique<Module>(ModuleGraph::path_key(path));
+    module->set_buffer(std::move(buffer));
+    return graph.add_module(std::move(module));
 }
 
-*/
-
-// ========== Dependency Graph methods ==========
-
-#ifdef OPTIC_DEBUG
-
-/* */
-void DependencyGraph::print_nodes() {
-	std::cout << "----- PRINTING GRAPH NODES -----\n\n";
-
-	for (auto &[module_name, node] : nodes) {
-		std::cout << "\nModule name: " << module_name << "\n";
-		
-		std::cout << "Dependencies = [";
-		for (size_t i = 0; i < node.dependencies.size(); i++) {
-			std::cout << node.dependencies[i];
-			
-			if (i + 1 < node.dependencies.size())
-				std::cout << ", ";
-		}
-		std::cout << "]\n\n";
-	}
+bool Preprocessor::process(ModuleID id, std::size_t depth) {
+    auto& graph = context.modules();
+    auto& module = *graph.get_module(id);
+    if (module.state() == ModuleState::Ready) return true;
+    if (module.state() == ModuleState::Failed) return false;
+    if (depth >= 256) {
+        error(module, {TokenType::Import, "import", 1, 1}, "Import nesting exceeds 256 modules.");
+        module.set_state(ModuleState::Failed);
+        return false;
+    }
+    module.set_state(ModuleState::Processing);
+    const auto errors_before = context.diagnostics().error_count();
+    std::vector<lexer::token_t> input;
+    lexer::Lexer(module, context.diagnostics()).tokenize(input);
+    auto& output = module.get_tokens();
+    output.clear();
+    if (context.diagnostics().error_count() != errors_before) {
+        output = std::move(input);
+        module.set_state(ModuleState::Failed);
+        return false;
+    }
+    auto& macros = macro_environments.try_emplace(id).first->second;
+    unsigned braces = 0;
+    try {
+        for (std::size_t cursor = 0; cursor + 1 < input.size();) {
+            const auto token = input[cursor++];
+            if (token.type == TokenType::Import) {
+                const auto start = cursor;
+                while (cursor + 1 < input.size() && input[cursor].line == token.line &&
+                       input[cursor].type != TokenType::Semicolon) ++cursor;
+                const auto end = cursor;
+                if (cursor + 1 < input.size() && input[cursor].type == TokenType::Semicolon) ++cursor;
+                if (braces != 0) { error(module, token, "Imports are only allowed at module scope."); continue; }
+                std::filesystem::path path;
+                if (end == start + 1 && input[start].type == TokenType::StringLiteral) {
+                    const auto& name = input[start].value;
+                    if (name.empty() || name.find('\0') != std::string::npos) {
+                        error(module, token, "Invalid empty or NUL-containing import path."); continue;
+                    }
+                    path = name;
+                } else {
+                    // Bare names use dotted module components: import math.vector
+                    bool expect_name = true, valid = start != end;
+                    for (auto i = start; i < end; ++i) {
+                        if (expect_name && input[i].type == TokenType::Identifier) path /= input[i].value;
+                        else if (expect_name || input[i].type != TokenType::Point) { valid = false; break; }
+                        expect_name = !expect_name;
+                    }
+                    if (!valid || expect_name) { error(module, token, "Expected a quoted path or dotted module name after 'import'."); continue; }
+                }
+                if (!path.has_extension()) path += OPTIC_EXTENSION;
+                if (path.is_relative()) path = std::filesystem::path(module.get_path()).parent_path() / path;
+                const auto dependency = load(path, {SourceKind::BufferNoAST, module.get_path(), "", token.line, token.column});
+                if (dependency == invalid_module_id) continue;
+                if (!graph.add_dependency(id, dependency)) {
+                    error(module, token, "Import cycle: '" + module.get_path() + "' -> '" + graph.get_module(dependency)->get_path() + "'.");
+                    continue;
+                }
+                if (!process(dependency, depth + 1)) {
+                    error(module, token, "Imported module failed preprocessing: '" + graph.get_module(dependency)->get_path() + "'.");
+                } else macros.import(macro_environments.at(dependency),
+                    {SourceKind::BufferNoAST, module.get_path(), "", token.line, token.column});
+                continue;
+            }
+            if (token.type == TokenType::Macro) {
+                if (braces != 0) throw MacroError(
+                    {SourceKind::BufferNoAST, module.get_path(), "", token.line, token.column},
+                    "Macros may only be declared at module scope.");
+                macros.define(input, cursor, module.get_path());
+                continue;
+            }
+            if (token.type == TokenType::Identifier && macros.contains(token.value)) {
+                --cursor;
+                auto generated = macros.expand(input, cursor, module.get_path());
+                for (const auto& item : generated) {
+                    if (item.type == TokenType::LeftBrace) ++braces;
+                    if (item.type == TokenType::RightBrace && braces != 0) --braces;
+                }
+                output.insert(output.end(), std::make_move_iterator(generated.begin()), std::make_move_iterator(generated.end()));
+                continue;
+            }
+            if (token.type == TokenType::LeftBrace) ++braces;
+            if (token.type == TokenType::RightBrace && braces != 0) --braces;
+            output.push_back(token);
+        }
+    } catch (const MacroError& failure) {
+        context.diagnostics().report(failure.location, "Error: " + std::string(failure.what()), "", "", DiagnosticsLevel::Error);
+    }
+    output.push_back(input.back());
+    const bool success = context.diagnostics().error_count() == errors_before;
+    module.set_state(success ? ModuleState::Ready : ModuleState::Failed);
+    return success;
 }
 
-#endif
-
-/* */
-bool dfs_recursive(const GraphNode &node, const std::map<std::string, GraphNode> &nodes, std::unordered_map<std::string, DependencyGraph::VisitState> &visit) noexcept {
-	if (visit.contains(node.module)) {
-		if (visit[node.module] == DependencyGraph::Visiting)
-			return true;
-		else if (visit[node.module] == DependencyGraph::Visited)
-			return false;
-	}
-
-	visit[node.module] = DependencyGraph::Visiting;
-
-	for (auto &dep : node.dependencies) {
-		auto dep_it = nodes.find(dep);
-		if (dfs_recursive(dep_it->second, nodes, visit)) return true;
-	}
-
-	visit[node.module] = DependencyGraph::Visited;
-	return false;
+bool Preprocessor::run(const std::vector<std::string>& input_files) {
+    const auto errors_before = context.diagnostics().error_count();
+    for (const auto& path : input_files) {
+        const auto id = load(path, {SourceKind::Stdin, "", "", 0, 0});
+        if (id != invalid_module_id) process(id, 0);
+    }
+    if (!context.modules().topological_sort()) {
+        context.diagnostics().report({}, "Error: Invalid module dependency graph.", "", "", DiagnosticsLevel::Error);
+    }
+    return context.diagnostics().error_count() == errors_before;
 }
-
-/* */
-void dfs_topo(GraphNode &node, std::map<std::string, GraphNode> &nodes, std::unordered_map<std::string, DependencyGraph::VisitState> &visit, std::vector<std::string> &order) noexcept {
-	if (visit.contains(node.module)) {
-		if (visit[node.module] == DependencyGraph::Visited)
-			return;
-	}
-
-	visit[node.module] = DependencyGraph::Visiting;
-
-	for (auto &dep : node.dependencies) {
-		auto dep_it = nodes.find(dep);
-		dfs_topo(dep_it->second, nodes, visit, order);
-	}
-
-	visit[node.module] = DependencyGraph::Visited;
-	order.push_back(node.module);
-}
-
-/* */
-GraphNode& DependencyGraph::add_node(const std::string &module) {
-	auto it = nodes.try_emplace(module, module);
-	return it.first->second;
-}
-
-/* */
-void DependencyGraph::add_dependency(const std::string &module, const std::string &dependency) noexcept {
-	auto &node = add_node(module);
-	node.dependencies.push_back(dependency);
-	add_node(dependency);
-
-	if (dfs_search_cycles()) {
-		nodes.erase(node.module);
-
-		// LATER: if the 'Wall' flag is on, report a warning for graph cycles
-	}
-}
-
-/* */
-void DependencyGraph::topological_sort() noexcept {
-	std::unordered_map<std::string, VisitState> visit;
-
-	for (auto &[_, node] : nodes) {
-		if (!visit.contains(node.module)) {
-			dfs_topo(node, nodes, visit, compilation_order);
-		}
-	}
-}
-
-/* */
-bool DependencyGraph::dfs_search_cycles() const noexcept {
-	std::unordered_map<std::string, VisitState> visit;
-	
-	for (auto &[_, node] : nodes) {
-		if (!visit.contains(node.module))
-			if (dfs_recursive(node, nodes, visit)) return true;
-	}
-
-	return false;
-}
-
-// ========== Preprocessor methods ==========
-
-/* */
-bool Preprocessor::is_valid_directive(const std::string &directive_name) { // Probably, this will be refactored
-	if (directive_name == "disk_binary") return true;
-	if (directive_name == "_WIN32") return true;
-	if (directive_name == "_WIN64") return true;
-	if (directive_name == "_POSIX_VERSION") return true;
-	// More directives...
-	return false;
-}
-
-/* */
-std::string Preprocessor::get_directive_name(const std::vector<uint8_t> &buffer, size_t &cursor, driver::SourceLocation &loc) {
-	std::string directive_name;
-
-	while (cursor < buffer.size() && (isalpha(buffer[cursor]) || buffer[cursor] == '_')) {
-		directive_name += buffer[cursor++];
-		loc.column++;
-	}
-
-	if (cursor < buffer.size() && buffer[cursor] == '\n') {
-		loc.line++;
-		loc.column = 1;
-		cursor++;
-	}
-
-	return directive_name;
-}
-
-/* */
-std::string Preprocessor::get_macro_name(const std::vector<uint8_t> &buffer, size_t &cursor, driver::SourceLocation &loc) {
-	std::string macro_name;
-
-	while (cursor < buffer.size() && (isalpha(buffer[cursor]) || buffer[cursor] == '_')) {
-		macro_name += buffer[cursor++];
-		loc.column++;
-	}
-
-	return macro_name;
-}
-
-/* */
-std::string Preprocessor::get_module_name(const std::vector<uint8_t> &buffer, size_t &cursor, driver::SourceLocation &loc) {
-	std::string module_;
-
-	while (cursor < buffer.size() && !isspace(buffer[cursor])) {
-		module_ += buffer[cursor++];
-		loc.column++;
-	}
-
-	if (cursor < buffer.size() && buffer[cursor] == '\n') {
-		loc.line++;
-		loc.column = 1;
-		cursor++;
-	}
-
-	return module_;
-}
-
-/* */
-std::string Preprocessor::read_keyword(const std::vector<uint8_t> &buffer, size_t &cursor, driver::SourceLocation &loc) {
-	std::string keyword;
-
-	while (cursor < buffer.size() && isalpha(buffer[cursor])) {
-		keyword += buffer[cursor++];
-		loc.column++;
-	}
-
-	return keyword;
-}
-
-/* */
-void Preprocessor::include_module(const std::string &mod, std::vector<uint8_t> &buffer, size_t &cursor, driver::SourceLocation &loc) {
-	while (cursor < buffer.size() && isspace(buffer[cursor]) && buffer[cursor] != '\n') cursor++;
-	std::string dep_name = get_module_name(buffer, cursor, loc);
-	preprocessor_context.graph->add_dependency(mod, dep_name);
-}
-
-/* */
-PreprocessedModule Preprocessor::analyze(const std::string &mod_name, std::vector<uint8_t> &buffer) {
-	PreprocessedModule module(mod_name);
-	driver::SourceLocation loc(driver::SourceKind::BufferNoAST, mod_name, "", 1, 1);
-	size_t cursor = 0;
-	
-	loc.file = mod_name;
-
-	while (cursor < buffer.size()) {
-		if (buffer[cursor] == '/') {
-			cursor++;
-
-			if ((cursor < buffer.size()) && (buffer[cursor] == '/')) {
-				while ((cursor < buffer.size()) && (buffer[cursor] != '\n')) { cursor++; loc.column++; }
-			} else if (cursor < buffer.size() && buffer[cursor] == '*') {
-				cursor++;
-				loc.column++;
-				
-				while ((cursor < buffer.size()) && !(buffer[cursor] == '*' && buffer[cursor + 1] == '/')) {
-					if (buffer[cursor] == '\n') {
-						loc.line++;
-						loc.column = 1;
-					}
-					loc.column++;
-					cursor++;
-				}
-
-				if (cursor == buffer.size()) {
-					preprocessor_context.diagnostic_engine->report(
-						loc,
-						"Error: Block comment not closed.",
-						"Solution: Append '*/' to the end of the block comment.\n",
-						"",
-						driver::DiagnosticsLevel::FatalError
-					);
-					module.error_flag = true;
-					return module;
-				}
-
-				if (cursor >= buffer.size() - 2) return module;
-			}
-			continue;
-		}
-
-		if (buffer[cursor] == '\n') {
-			loc.line++;
-			loc.column = 1;
-			module.buffer.push_back(buffer[cursor++]);
-			continue;
-		}
-
-		if (isalpha(buffer[cursor])) {
-			size_t start_ = cursor;
-			std::string keyword = read_keyword(buffer, cursor, loc);
-
-			if (keyword == "import") include_module(mod_name, buffer, cursor, loc);
-
-			else if (keyword == "directive") {
-				while (cursor < buffer.size() && isspace(buffer[cursor]) && buffer[cursor] != '\n') cursor++;
-				std::string directive = get_directive_name(buffer, cursor, loc);
-
-				// TODO: add logic to detect directive conflicts
-			}
-
-			else if (keyword == "macro") {
-				// TODO
-			}
-
-			else if (keyword == "compiletime") {
-				// TODO
-			}
-
-			else {
-				for (size_t i = start_; i < cursor; i++) {
-					module.buffer.push_back(buffer[i]);
-				}
-			}
-		}
-
-		module.buffer.push_back(buffer[cursor++]);
-		loc.column++;
-	}
-
-	return module;
-}
-
-/* */
-void Preprocessor::combine_modules(std::vector<uint8_t> &output, const std::unordered_map<std::string, PreprocessedModule> &processed_modules) {
-	if (!preprocessor_context.graph->get_order().size()) {
-		auto it = processed_modules.begin();
-		output.insert(output.begin(), it->second.buffer.begin(), it->second.buffer.end());
-		return;
-	}
-
-	for (const std::string &module : preprocessor_context.graph->get_order()) {
-		auto it = processed_modules.find(module);
-		output.insert(output.end(), it->second.buffer.begin(), it->second.buffer.end());
-	}
-}
-
 } // namespace optic::compiler::preprocessor

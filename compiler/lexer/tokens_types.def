@@ -73,9 +73,8 @@ X(LessEqual)
 X(Greater)
 X(GreaterEqual)
 
-// ===== Preprocessor / directives =====
+// ===== Preprocessor =====
 X(Import)
-X(Directive)
 X(Macro)
 
 // ===== Keywords =====
@@ -102,8 +101,15 @@ X(Struct)
 X(Class)
 X(Lambda)
 
+// ===== Literal values (distinct from type keywords) =====
+X(IntegerLiteral)
+X(FloatLiteral)
+X(StringLiteral)
+X(CharLiteral)
+
 // ===== Special =====
 X(LiteralTrue)
 X(LiteralFalse)
 X(FString)
+X(RawString)
 X(EndOfFile)
