@@ -774,7 +774,7 @@ public:
                 throw MacroError(macro.definition->location, "Macro representation exceeds 1 MiB.");
             result += piece;
         };
-        add("Macro " + macro.definition->name + " { value = ");
+        add("macro " + macro.definition->name + " { value = ");
         add(text(macro.value, true));
         add("; expression = ");
         add(text(macro.expression, true));

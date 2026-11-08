@@ -3,11 +3,11 @@
 Macros are compile-time objects with a mutable `value`, an `expression` prefix,
 and typed functions. They are processed before the runtime Optic parser.
 Declarations disappear from the parser token stream; invocations either inject
-source or produce a scalar literal. Both `Macro` and the earlier `macro` spelling
-are accepted. Declarations must be at module scope.
+source or produce a scalar literal. The keyword is case-sensitive: only `macro`
+is accepted; `Macro` is an ordinary identifier. Declarations must be at module scope.
 
 ```optic
-Macro MyMacro {
+macro MyMacro {
     value = -1;
     expression: "int value = "
 
@@ -42,7 +42,7 @@ Its type can change on assignment; parameter, local and return types are checked
 to permit `null`. Omitting the field initializes it to nullable `null`:
 
 ```optic
-Macro Optional {
+macro Optional {
     value = 7;
     expression?: null
 
@@ -101,7 +101,7 @@ It reports the macro name, current fields and custom function signatures. For
 example:
 
 ```text
-Macro MyMacro { value = 42; expression = "int value = "; functions = [macro_funcion(int) -> void, to_string() -> string] }
+macro MyMacro { value = 42; expression = "int value = "; functions = [macro_funcion(int) -> void, to_string() -> string] }
 ```
 
 Function groups are represented in name order, with overloads in declaration
@@ -115,7 +115,7 @@ expressions must be evaluable at preprocessing time; runtime variables are not
 available.
 
 ```optic
-Macro Calculate {
+macro Calculate {
     value = 3;
 
     fn choose(int input) -> int { return input * value; }

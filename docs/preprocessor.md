@@ -44,7 +44,7 @@ entries.
 
 ## Macros
 
-`Macro` declarations contain a value, an optional nullable expression prefix,
+`macro` declarations contain a value, an optional nullable expression prefix,
 and typed compile-time functions. Bare macro names inject the source returned
 by `to_string`; explicit member calls can update state or return scalar values.
 See [macro declarations and evaluation](macros.md) for the complete syntax,

@@ -40,7 +40,7 @@ void expect_value(preprocessor::MacroEnvironment& environment, const std::string
 }
 void transactions() {
     preprocessor::MacroEnvironment environment;
-    define(environment, R"(Macro M {
+    define(environment, R"(macro M {
         value = 1;
         expression?: null
         fn set(int val) { value = val; }
@@ -61,11 +61,11 @@ void transactions() {
     check(failed && cursor == 0, "failing expansion advanced its caller or silently succeeded");
     expect_value(environment, "M.value", "1");
     failed = false;
-    try { define(environment, "Macro Bad { value = M.set(99); }"); }
+    try { define(environment, "macro Bad { value = M.set(99); }"); }
     catch (const preprocessor::MacroError&) { failed = true; }
     check(failed && !environment.contains("Bad"), "failed definition became visible");
     expect_value(environment, "M.value", "1");
-    define(environment, "Macro Invalid { value = 0; fn to_string() -> string { M.set(8); return \"@\"; } }");
+    define(environment, "macro Invalid { value = 0; fn to_string() -> string { M.set(8); return \"@\"; } }");
     failed = false;
     try { expand(environment, "Invalid"); }
     catch (const preprocessor::MacroError&) { failed = true; }
@@ -84,8 +84,8 @@ void transactions() {
     expect_value(importer, "M.value", "5");
     expect_value(copy, "M.value", "6");
     preprocessor::MacroEnvironment conflicting;
-    define(conflicting, "Macro M { value = 2; }");
-    define(conflicting, "Macro A { value = 3; }");
+    define(conflicting, "macro M { value = 2; }");
+    define(conflicting, "macro A { value = 3; }");
     failed = false;
     try { importer.import(conflicting, {}); }
     catch (const preprocessor::MacroError&) { failed = true; }
@@ -93,7 +93,7 @@ void transactions() {
     expect_value(importer, "M.value", "5");
 }
 void malformed_input() {
-    const std::string declaration = R"(Macro Truncated {
+    const std::string declaration = R"(macro Truncated {
         value = -1;
         expression: "return "
         fn set(int n) { value = n; }
@@ -121,8 +121,8 @@ void malformed_input() {
         catch (const preprocessor::MacroError&) { check(cursor == 1, "mutation advanced caller on error"); }
     }
     for (const auto& source : {
-        "Macro Deep { value = " + std::string(256, '(') + "1" + std::string(256, ')') + "; }",
-        "Macro Deep { value = 1; fn run() {" + std::string(256, '{') + std::string(256, '}') + "} }"}) {
+        "macro Deep { value = " + std::string(256, '(') + "1" + std::string(256, ')') + "; }",
+        "macro Deep { value = 1; fn run() {" + std::string(256, '{') + std::string(256, '}') + "} }"}) {
         preprocessor::MacroEnvironment environment;
         bool failed = false;
         try { define(environment, source); }
@@ -130,8 +130,8 @@ void malformed_input() {
         check(failed, "excessive AST nesting accepted");
     }
     for (const auto& source : {
-        "Macro Flat { value = 1" + [] { std::string s; for (int i = 0; i < 4096; ++i) s += "+1"; return s; }() + "; }",
-        "Macro Elifs { value = 1; fn f() { if false {}" + [] { std::string s; for (int i = 0; i < 512; ++i) s += " elif false {}"; return s; }() + "} }"}) {
+        "macro Flat { value = 1" + [] { std::string s; for (int i = 0; i < 4096; ++i) s += "+1"; return s; }() + "; }",
+        "macro Elifs { value = 1; fn f() { if false {}" + [] { std::string s; for (int i = 0; i < 512; ++i) s += " elif false {}"; return s; }() + "} }"}) {
         preprocessor::MacroEnvironment environment;
         bool failed = false;
         try { define(environment, source); }
