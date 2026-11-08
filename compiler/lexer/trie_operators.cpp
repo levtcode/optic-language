@@ -2,12 +2,12 @@
  * @file trie_operators.cpp
  * @brief Operator prefix lookup using a trie.
  *
- * C++ declarations and definitions belong to namespace optic.
+ * C++ declarations and definitions belong to namespace optic::compiler::lexer.
  */
 
 #include "compiler/lexer/trie_operators.hpp"
 
-namespace optic {
+namespace optic::compiler::lexer {
 
 /* */
 void TrieNode::insert(const std::string &operator_, TrieNode *root) noexcept {
@@ -68,4 +68,4 @@ void TrieNode::destroy(TrieNode *root) noexcept {
     recursive_destroy(root);
 }
 
-} // namespace optic
+} // namespace optic::compiler::lexer

@@ -114,7 +114,9 @@ flowchart TD
 
 The CLI and compiler build as separate executable targets. `optic` delegates
 compiler work through the OS process API; it does not embed compiler internals.
-C++ APIs live in `namespace optic`, with CLI coordination in `optic::cli`.
+C++ APIs share the `optic::` root and are grouped by subsystem: compiler
+APIs use `optic::compiler::driver`, `optic::compiler::lexer`, and
+`optic::compiler::preprocessor`; CLI coordination uses `optic::cli`.
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug

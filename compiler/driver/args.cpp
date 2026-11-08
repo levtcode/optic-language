@@ -2,18 +2,18 @@
  * @file args.cpp
  * @brief Compiler argument inspection and typed option parsing.
  *
- * C++ declarations and definitions belong to namespace optic.
+ * C++ declarations and definitions belong to namespace optic::compiler::driver.
  */
 
 #include "compiler/driver/args.hpp"
 #include <iostream>
 #include <charconv>
 
-namespace optic {
+namespace optic::compiler::driver {
 
 
 /* */
-void cli_tooling::print_args_files(std::vector<std::string> &files) {
+void print_args_files(std::vector<std::string> &files) {
     std::cout << "Files:\n";
     for (const auto &f : files) {
         std::cout << "  " << f << "\n";
@@ -21,7 +21,7 @@ void cli_tooling::print_args_files(std::vector<std::string> &files) {
 }
 
 /* */
-void cli_tooling::print_args_options(std::unordered_map<std::string, ArgValue> &options) {
+void print_args_options(std::unordered_map<std::string, ArgValue> &options) {
     std::cout << "\nCompiler options:\n";
     for (const auto &[key, value] : options) {
         std::cout << "  " << key << " = ";
@@ -41,7 +41,7 @@ void cli_tooling::print_args_options(std::unordered_map<std::string, ArgValue> &
 }
 
 /* */
-void cli_tooling::print_args_flags(std::unordered_map<std::string, bool> &flags) {
+void print_args_flags(std::unordered_map<std::string, bool> &flags) {
     std::cout << "\nCompiler flags:\n";
     for (const auto &[key, value] : flags) {
         std::cout << "  " << key << " -> ";
@@ -58,8 +58,7 @@ void cli_tooling::print_args_flags(std::unordered_map<std::string, bool> &flags)
 }
 
 /* */
-void cli_tooling::print_args(CompilerConfig &config) {
-    using namespace cli_tooling;
+void print_args(CompilerConfig &config) {
 
     std::cout << "----- PRINTING COMPILER ARGUMENTS -----\n\n";
     print_args_files  (config.input_files);
@@ -67,7 +66,7 @@ void cli_tooling::print_args(CompilerConfig &config) {
     print_args_flags  (config.flags);
 }
 
-int cli_tooling::match_compiler_arg(const std::string_view &arg, size_t *index) {
+int match_compiler_arg(const std::string_view &arg, size_t *index) {
     if (arg.empty() || arg[0] != '-') return -1;
 
     size_t i = 0;
@@ -78,7 +77,7 @@ int cli_tooling::match_compiler_arg(const std::string_view &arg, size_t *index) 
     else                   return 0;
 }
 
-bool cli_tooling::same_arg_type(const ArgValue& a, const ArgValue& b) {
+bool same_arg_type(const ArgValue& a, const ArgValue& b) {
     return std::visit(
         []<typename A, typename B>(const A&, const B&) {
             return std::is_same_v<A, B>;
@@ -87,7 +86,7 @@ bool cli_tooling::same_arg_type(const ArgValue& a, const ArgValue& b) {
     );
 }
 
-ArgValue cli_tooling::parse_value(const std::string_view &option_name, size_t *index) {
+ArgValue parse_value(const std::string_view &option_name, size_t *index) {
     if (*index >= option_name.size()) {
         *index = std::string::npos;
         return std::string{};
@@ -129,4 +128,4 @@ ArgValue cli_tooling::parse_value(const std::string_view &option_name, size_t *i
     return std::string{value};
 }
 
-} // namespace optic
+} // namespace optic::compiler::driver

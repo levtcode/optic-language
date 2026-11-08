@@ -2,14 +2,14 @@
  * @file preprocessor.cpp
  * @brief Experimental preprocessing and module dependency handling.
  *
- * C++ declarations and definitions belong to namespace optic.
+ * C++ declarations and definitions belong to namespace optic::compiler::preprocessor.
  */
 
 #include "compiler/preprocessor/preprocessor.hpp"
 #include <iostream>
 #include <cstddef>
 
-namespace optic {
+namespace optic::compiler::preprocessor {
 
 // TO REFACTORIZE
 
@@ -147,7 +147,7 @@ bool Preprocessor::is_valid_directive(const std::string &directive_name) { // Pr
 }
 
 /* */
-std::string Preprocessor::get_directive_name(const std::vector<uint8_t> &buffer, size_t &cursor, SourceLocation &loc) {
+std::string Preprocessor::get_directive_name(const std::vector<uint8_t> &buffer, size_t &cursor, driver::SourceLocation &loc) {
 	std::string directive_name;
 
 	while (cursor < buffer.size() && (isalpha(buffer[cursor]) || buffer[cursor] == '_')) {
@@ -165,7 +165,7 @@ std::string Preprocessor::get_directive_name(const std::vector<uint8_t> &buffer,
 }
 
 /* */
-std::string Preprocessor::get_macro_name(const std::vector<uint8_t> &buffer, size_t &cursor, SourceLocation &loc) {
+std::string Preprocessor::get_macro_name(const std::vector<uint8_t> &buffer, size_t &cursor, driver::SourceLocation &loc) {
 	std::string macro_name;
 
 	while (cursor < buffer.size() && (isalpha(buffer[cursor]) || buffer[cursor] == '_')) {
@@ -177,7 +177,7 @@ std::string Preprocessor::get_macro_name(const std::vector<uint8_t> &buffer, siz
 }
 
 /* */
-std::string Preprocessor::get_module_name(const std::vector<uint8_t> &buffer, size_t &cursor, SourceLocation &loc) {
+std::string Preprocessor::get_module_name(const std::vector<uint8_t> &buffer, size_t &cursor, driver::SourceLocation &loc) {
 	std::string module_;
 
 	while (cursor < buffer.size() && !isspace(buffer[cursor])) {
@@ -195,7 +195,7 @@ std::string Preprocessor::get_module_name(const std::vector<uint8_t> &buffer, si
 }
 
 /* */
-std::string Preprocessor::read_keyword(const std::vector<uint8_t> &buffer, size_t &cursor, SourceLocation &loc) {
+std::string Preprocessor::read_keyword(const std::vector<uint8_t> &buffer, size_t &cursor, driver::SourceLocation &loc) {
 	std::string keyword;
 
 	while (cursor < buffer.size() && isalpha(buffer[cursor])) {
@@ -207,7 +207,7 @@ std::string Preprocessor::read_keyword(const std::vector<uint8_t> &buffer, size_
 }
 
 /* */
-void Preprocessor::include_module(const std::string &mod, std::vector<uint8_t> &buffer, size_t &cursor, SourceLocation &loc) {
+void Preprocessor::include_module(const std::string &mod, std::vector<uint8_t> &buffer, size_t &cursor, driver::SourceLocation &loc) {
 	while (cursor < buffer.size() && isspace(buffer[cursor]) && buffer[cursor] != '\n') cursor++;
 	std::string dep_name = get_module_name(buffer, cursor, loc);
 	preprocessor_context.graph->add_dependency(mod, dep_name);
@@ -216,7 +216,7 @@ void Preprocessor::include_module(const std::string &mod, std::vector<uint8_t> &
 /* */
 PreprocessedModule Preprocessor::analyze(const std::string &mod_name, std::vector<uint8_t> &buffer) {
 	PreprocessedModule module(mod_name);
-	SourceLocation loc(SourceKind::BufferNoAST, mod_name, "", 1, 1);
+	driver::SourceLocation loc(driver::SourceKind::BufferNoAST, mod_name, "", 1, 1);
 	size_t cursor = 0;
 	
 	loc.file = mod_name;
@@ -246,7 +246,7 @@ PreprocessedModule Preprocessor::analyze(const std::string &mod_name, std::vecto
 						"Error: Block comment not closed.",
 						"Solution: Append '*/' to the end of the block comment.\n",
 						"",
-						DiagnosticsLevel::FatalError
+						driver::DiagnosticsLevel::FatalError
 					);
 					module.error_flag = true;
 					return module;
@@ -313,4 +313,4 @@ void Preprocessor::combine_modules(std::vector<uint8_t> &output, const std::unor
 	}
 }
 
-} // namespace optic
+} // namespace optic::compiler::preprocessor

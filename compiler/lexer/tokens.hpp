@@ -2,14 +2,14 @@
  * @file tokens.hpp
  * @brief Token kinds and source-positioned lexical tokens.
  *
- * C++ declarations and definitions belong to namespace optic.
+ * C++ declarations and definitions belong to namespace optic::compiler::lexer.
  */
 
 #pragma once
 
 #include <string>
 
-namespace optic {
+namespace optic::compiler::lexer {
 
 enum class TokenType {
     // Types
@@ -135,4 +135,4 @@ struct token_t {
     type(typ), value(val), line(ln), column(col) {}
 };
 
-} // namespace optic
+} // namespace optic::compiler::lexer

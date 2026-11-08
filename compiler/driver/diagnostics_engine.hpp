@@ -2,7 +2,7 @@
  * @file diagnostics_engine.hpp
  * @brief Source diagnostics, severity reporting and diagnostic presentation.
  *
- * C++ declarations and definitions belong to namespace optic.
+ * C++ declarations and definitions belong to namespace optic::compiler::driver.
  */
 
 // MORE LATER: Create DiagnosticRange or similar, to measure the distance between 2 SourceLocation instances
@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-namespace optic {
+namespace optic::compiler::driver {
 
 /* */
 enum class DiagnosticsLevel {
@@ -107,4 +107,4 @@ public:
                                  const std::string &pointer) noexcept;
 };
 
-} // namespace optic
+} // namespace optic::compiler::driver

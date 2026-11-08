@@ -2,7 +2,7 @@
  * @file trie_operators.hpp
  * @brief Operator prefix lookup using a trie.
  *
- * C++ declarations and definitions belong to namespace optic.
+ * C++ declarations and definitions belong to namespace optic::compiler::lexer.
  */
 
 #pragma once
@@ -12,7 +12,7 @@
 #include <unordered_map>
 #include <string>
 
-namespace optic {
+namespace optic::compiler::lexer {
 
 /* */
 struct TrieNode {
@@ -26,4 +26,4 @@ struct TrieNode {
     static bool is_prefix(const std::string &op, const std::unordered_map<std::string_view, TokenType>&) noexcept;
 };
 
-} // namespace optic
+} // namespace optic::compiler::lexer

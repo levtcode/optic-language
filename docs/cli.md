@@ -5,7 +5,7 @@ compiler process. There is no resident core or persistent IPC protocol.
 
 ```text
 optic.cpp -> optic::cli::CliTool -> process launcher -> opticc
-                                                     -> optic::CompilerInstance
+                                                     -> optic::compiler::driver::CompilerInstance
 ```
 
 ## Build and installation
@@ -93,8 +93,25 @@ The CLI owns general help; the compiler owns compiler-specific help.
 
 ## Namespaces and file responsibilities
 
-All implementation APIs use `optic`, with the coordinator in `optic::cli` and
-compiler argument helpers in `optic::cli_tooling`. The two process entry points
+The shared root is `optic::`; each component owns its namespace, with compiler
+subsystems nested under `optic::compiler`:
+
+| Namespace | Members |
+| --- | --- |
+| `optic::cli` | `CliTool`, component discovery and process execution. |
+| `optic::compiler::driver` | `CompilerInstance`, configuration, diagnostics, `Module`, `ModuleGraph` and compiler argument helpers. |
+| `optic::compiler::lexer` | `Lexer`, tokens, lookup tables and operator trie. |
+| `optic::compiler::preprocessor` | Experimental preprocessing and dependency graph. |
+
+Namespaces describe subsystems, not individual files. For example, `Module`
+belongs to the driver, so there is no `module` namespace. The future parser
+should use `optic::compiler::parser`; no parser namespace or API is introduced
+until that subsystem exists. Compiler argument helpers belong directly to the
+driver, rather than a separate `cli_tooling` namespace. Dependencies between
+subsystems use explicit qualifications such as `lexer::token_t` and
+`driver::DiagnosticsEngine`.
+
+The two process entry points
 remain global `main` functions. `tokens_types.def` remains a macro expansion
 list included inside the compiler implementation; it is not a standalone API.
 
@@ -106,20 +123,20 @@ list included inside the compiler implementation; it is not a standalone API.
 | `compiler/opticc.cpp` | Standalone compiler entry point, mode selection and compiler help routing. |
 | `compiler/driver/compiler_instance.hpp`, `.cpp` | Compiler configuration and phase coordination; explicit argv contract, input checks and unavailable-backend errors. |
 | `compiler/driver/args.hpp`, `.cpp` | Compiler argument helpers; corrected option values, empty-input guards and double parsing. |
-| `compiler/driver/diagnostics_engine.hpp`, `.cpp` | Diagnostics under `optic`; configuration setter connects parsed diagnostic options. |
-| `compiler/driver/module.hpp`, `.cpp` | Source modules and graph under `optic`; existing behavior retained. |
-| `compiler/lexer/lexer.hpp`, `.cpp` | Lexical analyzer under `optic`; system includes stay outside the namespace. |
-| `compiler/lexer/tables.hpp` | Lexical lookup tables under `optic`. |
-| `compiler/lexer/tokens.hpp` | Token types under `optic`. |
-| `compiler/lexer/trie_operators.hpp`, `.cpp` | Operator trie under `optic`. |
-| `compiler/preprocessor/preprocessor.hpp`, `.cpp` | Experimental preprocessor under `optic`; align `include_module` with the module-name string its caller supplies, fixing a pre-existing build error. |
+| `compiler/driver/diagnostics_engine.hpp`, `.cpp` | Diagnostics under `optic::compiler::driver`; configuration setter connects parsed diagnostic options. |
+| `compiler/driver/module.hpp`, `.cpp` | Source modules and graph under `optic::compiler::driver`; existing behavior retained. |
+| `compiler/lexer/lexer.hpp`, `.cpp` | Lexical analyzer under `optic::compiler::lexer`; system includes stay outside the namespace. |
+| `compiler/lexer/tables.hpp` | Lexical lookup tables under `optic::compiler::lexer`. |
+| `compiler/lexer/tokens.hpp` | Token types under `optic::compiler::lexer`. |
+| `compiler/lexer/trie_operators.hpp`, `.cpp` | Operator trie under `optic::compiler::lexer`. |
+| `compiler/preprocessor/preprocessor.hpp`, `.cpp` | Experimental preprocessor under `optic::compiler::preprocessor`; align `include_module` with the module-name string its caller supplies, fixing a pre-existing build error. |
 | `CMakeLists.txt` | Separate build/install targets and optional CTest integration. |
 | `tests/cli_component.cpp` | Executable fixture for argv, streams, exit codes and POSIX signals. |
 | `tests/cli_integration.py` | Integration checks using real processes and temporary directories. |
 | `README.md`, `docs/cli.md` | Current structure, usage, migration scope and limitations. |
 
 Each modified C++ file has a Doxygen file description. The namespace migration
-changes qualified C++ API names; downstream C++ callers must use `optic::`.
+changes qualified C++ API names; downstream C++ callers must use the appropriate `optic::compiler::<subsystem>::` qualification.
 
 ## Future orchestration
 

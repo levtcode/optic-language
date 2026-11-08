@@ -17,7 +17,7 @@
 #include "compiler/lexer/trie_operators.hpp"
 #include <iostream>
 
-namespace optic {
+namespace optic::compiler::lexer {
 
 inline bool is_octal(int c) noexcept { return (c >= '0' && c <= '7'); }
 
@@ -185,7 +185,7 @@ token_t Lexer::read_string() noexcept {
             "Error: String not closed",
             "Solution: Close the string, append '\"' to the end of the string. Example: \"Hello World\" <- here\n",
             "More information: <...>",
-            DiagnosticsLevel::Error
+            driver::DiagnosticsLevel::Error
         );
     }
 
@@ -312,7 +312,7 @@ void Lexer::ignore_comment() noexcept {
             "Error: Block comment not closed, '*/' expected",
             "Solution: Append '*/' to the end of the block comment. Example: /* This is a block comment */ <- here\n",
             "More information: <...>",
-            DiagnosticsLevel::Error
+            driver::DiagnosticsLevel::Error
         );
     }
 
@@ -422,7 +422,7 @@ const char *to_string_token(const TokenType type) {
     }
 }
 
-void Lexer::print_tokens(Module &module) noexcept {
+void Lexer::print_tokens(driver::Module &module) noexcept {
     for (auto &token : module.get_tokens()) {
         std::cout << "Token type: " << to_string_token(token.type) << "\n";
         std::cout << "Token value: '" << token.value << "'\n";
@@ -431,4 +431,4 @@ void Lexer::print_tokens(Module &module) noexcept {
     }
 }
 
-} // namespace optic
+} // namespace optic::compiler::lexer

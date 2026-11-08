@@ -2,7 +2,7 @@
  * @file compiler_instance.hpp
  * @brief Compiler configuration and frontend phase coordination.
  *
- * C++ declarations and definitions belong to namespace optic.
+ * C++ declarations and definitions belong to namespace optic::compiler::driver.
  */
 
 #pragma once
@@ -17,7 +17,7 @@
 #include <variant>
 #include <vector>
 
-namespace optic {
+namespace optic::compiler::driver {
 
 using ArgValue = std::variant<
     bool,
@@ -203,4 +203,4 @@ public:
     ) const;
 };
 
-} // namespace optic
+} // namespace optic::compiler::driver
