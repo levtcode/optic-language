@@ -15,6 +15,10 @@ public:
 
 private:
     driver::CompilerContext& context;
+    std::size_t import_requests = 0;
+    std::size_t imports_completed = 0;
+    std::size_t lexical_tokens = 0;
+    void trace(const std::string& message) const;
     driver::ModuleID load(const std::filesystem::path& path, const driver::SourceLocation& loc);
     bool process(driver::ModuleID id, std::size_t depth);
     void error(const driver::Module& module, const lexer::token_t& token, const std::string& message);

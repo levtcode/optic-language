@@ -247,10 +247,14 @@ void CompilerInstance::preprocess() noexcept {
     auto& config = compiler_context.config();
     try {
         preprocessor::Preprocessor preprocessor(compiler_context);
-        if (!preprocessor.run(config.input_files)) return;
+        const bool success = preprocessor.run(config.input_files);
         if (config.mode == CompilerMode::Debug) {
             auto& modules = compiler_context.modules();
             modules.print(std::cout);
+            if (!success) {
+                std::cout << "[preprocessor] Token dump skipped: preprocessing failed.\n";
+                return;
+            }
             std::cout << "\n----- PRINTING PREPROCESSED TOKENS -----\n\n";
             for (const auto id : modules.compilation_order()) {
                 const auto& module = *modules.get_module(id);
