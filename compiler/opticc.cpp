@@ -10,19 +10,22 @@
 #include <iostream>
 #include <string_view>
 
+constexpr int CLI_INVOCATION_FAILURE = 2;
+
+
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         optic::compiler::driver::CompilerInstance::call_usage();
-        return 2;
+        return CLI_INVOCATION_FAILURE;
     }
     const std::string_view command(argv[1]);
     if (command == "help" || command == "--help" || command == "-h") {
         optic::compiler::driver::CompilerInstance::call_usage();
-        return argc == 2 ? 0 : 2;
+        return argc == 2 ? EXIT_SUCCESS : CLI_INVOCATION_FAILURE;
     }
     if (command == "--version") {
         std::cout << "opticc " << OPTIC_VERSION << '\n';
-        return argc == 2 ? 0 : 2;
+        return argc == 2 ? EXIT_SUCCESS : CLI_INVOCATION_FAILURE;
     }
     optic::compiler::driver::CompilerMode mode;
     if (command == "build") mode = optic::compiler::driver::CompilerMode::Build;
@@ -30,11 +33,11 @@ int main(int argc, char* argv[]) {
     else if (command == "debug") mode = optic::compiler::driver::CompilerMode::Debug;
     else {
         std::cerr << "opticc: unknown mode '" << command << "'.\n";
-        return 2;
+        return CLI_INVOCATION_FAILURE;
     }
     if (argc == 3 && (std::string_view(argv[2]) == "--help" || std::string_view(argv[2]) == "-h")) {
         optic::compiler::driver::CompilerInstance::call_usage();
-        return 0;
+        return EXIT_SUCCESS;
     }
     optic::compiler::driver::CompilerInstance compiler;
     // run() receives compiler arguments only: neither executable name nor mode.

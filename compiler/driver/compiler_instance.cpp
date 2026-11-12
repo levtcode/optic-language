@@ -33,6 +33,8 @@ void CompilerInstance::call_usage(bool help_manual) noexcept {
         "  --help, -h    Show this help.\n"
         "  --version     Show compiler version.\n"
     );
+
+    /// if help_manual is enabled, opticc will show extended info. Not implemented yet
 }
 
 
