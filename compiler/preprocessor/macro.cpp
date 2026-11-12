@@ -17,6 +17,7 @@
 #include <optional>
 #include <set>
 #include <sstream>
+#include <ostream>
 #include <variant>
 
 namespace optic::compiler::preprocessor {
@@ -28,8 +29,15 @@ constexpr std::size_t max_string = 1024 * 1024;
 constexpr std::size_t max_tokens = 1000000;
 struct VoidValue { bool operator==(const VoidValue&) const = default; };
 struct Character { std::string text; bool operator==(const Character&) const = default; };
-using Value = std::variant<std::monostate, std::int64_t, double, bool, std::string, Character, VoidValue>;
-enum class Type { Null, Int, Float, Bool, String, Char, Void };
+struct Value;
+using Array = std::vector<Value>;
+using Object = std::map<std::string, Value>;
+struct Value : std::variant<std::monostate, std::int64_t, double, bool, std::string, Character, VoidValue, Array, Object> {
+    using variant::variant;
+    using variant::operator=;
+    bool operator==(const Value&) const = default;
+};
+enum class Type { Null, Int, Float, Bool, String, Char, Void, Array, Object };
 struct TypeSpec {
     Type type;
     bool nullable = false;
@@ -38,7 +46,7 @@ struct TypeSpec {
 struct Expr;
 using Expression = std::shared_ptr<const Expr>;
 struct Expr {
-    enum class Form { Literal, Name, Unary, Binary, Call, Format } form;
+    enum class Form { Literal, Name, Unary, Binary, Call, Format, Array, Object, Member, MemberCall, Index } form;
     Token token;
     Value value;
     std::string name;
@@ -60,6 +68,7 @@ struct Function {
     std::vector<Parameter> parameters;
     TypeSpec result{Type::Void};
     Statement body;
+    std::string display{};
 };
 struct Definition {
     std::string name;
@@ -80,7 +89,7 @@ Location locate(const std::string& file, const Token& token) {
 }
 Type type_of(const Value& value) { return static_cast<Type>(value.index()); }
 std::string type_name(TypeSpec spec) {
-    static constexpr const char* names[]{"null", "int", "float", "bool", "string", "char", "void"};
+    static constexpr const char* names[]{"null", "int", "float", "bool", "string", "char", "void", "array", "object"};
     return std::string(names[static_cast<unsigned>(spec.type)]) + (spec.nullable ? "?" : "");
 }
 bool scalar_character(const std::string& value) {
@@ -128,6 +137,27 @@ std::string text(const Value& value, bool source = false) {
     if (const auto* b = std::get_if<bool>(&value)) return *b ? "true" : "false";
     if (const auto* s = std::get_if<std::string>(&value)) return source ? quote(*s) : *s;
     if (std::holds_alternative<VoidValue>(value)) throw std::runtime_error("void has no scalar representation");
+    if (std::holds_alternative<Array>(value) || std::holds_alternative<Object>(value)) {
+        std::string result = std::holds_alternative<Array>(value) ? "[" : "{";
+        auto add = [&](const std::string& part) {
+            if (part.size() > max_string || result.size() > max_string - part.size())
+                throw std::runtime_error("Macro collection representation exceeds 1 MiB");
+            result += part;
+        };
+        bool first = true;
+        if (const auto* array = std::get_if<Array>(&value)) for (const auto& item : *array) {
+            if (!first) add(", ");
+            first = false;
+            add(text(item, true));
+        }
+        else for (const auto& [key, item] : std::get<Object>(value)) {
+            if (!first) add(", ");
+            first = false;
+            add(quote(key) + ": " + text(item, true));
+        }
+        add(std::holds_alternative<Array>(value) ? "]" : "}");
+        return result;
+    }
     const auto& c = std::get<Character>(value).text;
     return source ? quote(c, '\'') : c;
 }
@@ -193,6 +223,8 @@ public:
         if (token.type == Kind::Bool) return Type::Bool;
         if (token.type == Kind::String) return Type::String;
         if (token.type == Kind::Char) return Type::Char;
+        if (token.type == Kind::Array) return Type::Array;
+        if (token.type == Kind::Identifier && token.value == "object") return Type::Object;
         if (token.type == Kind::Identifier && token.value == "void") return Type::Void;
         return std::nullopt;
     }
@@ -256,7 +288,7 @@ public:
         if (token.type == Kind::LeftParen) {
             auto value = expression();
             expect(Kind::RightParen, "Expected ')' in macro expression.");
-            return value;
+            return postfix(value);
         }
         Expr result{Expr::Form::Literal, token, {}, "", {}};
         if (token.type == Kind::IntegerLiteral) {
@@ -287,13 +319,48 @@ public:
         } else if (token.type == Kind::Identifier || type(token)) {
             result.form = Expr::Form::Name;
             result.name = token.value;
-            if (accept(Kind::Point)) result.name += "." + expect(Kind::Identifier, "Expected macro member name.").value;
             if (peek().type == Kind::LeftParen) {
                 result.form = Expr::Form::Call;
                 result.children = arguments();
             }
-        } else fail(file, token, "Expected a scalar macro expression.");
-        return make_node(std::move(result));
+        } else if (token.type == Kind::LeftBracket || token.type == Kind::LeftBrace) {
+            const bool object = token.type == Kind::LeftBrace;
+            result.form = object ? Expr::Form::Object : Expr::Form::Array;
+            const auto close = object ? Kind::RightBrace : Kind::RightBracket;
+            if (!accept(close)) {
+                do {
+                    if (object) {
+                        const auto key = take();
+                        if (key.type != Kind::Identifier && key.type != Kind::StringLiteral)
+                            fail(file, key, "Object keys must be identifiers or strings.");
+                        result.children.push_back(make_node(Expr{Expr::Form::Literal, key, key.value, "", {}}));
+                        expect(Kind::Colon, "Expected ':' after object key.");
+                    }
+                    result.children.push_back(expression());
+                } while (accept(Kind::Comma) && peek().type != close);
+                expect(close, "Unclosed macro collection.");
+            }
+        } else fail(file, token, "Expected a macro expression.");
+        return postfix(make_node(std::move(result)));
+    }
+    Expression postfix(Expression base) {
+        while (true) {
+            if (accept(Kind::Point)) {
+                auto name = expect(Kind::Identifier, "Expected member name.");
+                Expr node{Expr::Form::Member, name, {}, name.value, {base}};
+                if (peek().type == Kind::LeftParen) {
+                    node.form = Expr::Form::MemberCall;
+                    const auto args = arguments();
+                    node.children.insert(node.children.end(), args.begin(), args.end());
+                }
+                base = make_node(std::move(node));
+            } else if (accept(Kind::LeftBracket)) {
+                auto index = expression();
+                const auto close = expect(Kind::RightBracket, "Expected ']' after index.");
+                base = make_node(Expr{Expr::Form::Index, close, {}, "", {base, index}});
+            } else break;
+        }
+        return base;
     }
     void parse_format(Expr& format, const Token& content) {
         // Alternate literal and expression nodes; doubled braces are literal braces.
@@ -404,6 +471,7 @@ public:
         return {Statement::Form::If, token, "", {Type::Void}, condition, std::move(branches)};
     }
     Function function() {
+        const auto start = cursor;
         take(); // 'fn' is contextual, not a lexer keyword.
         const auto name = expect(Kind::Identifier, "Expected macro function name after 'fn'.");
         Function result{name, name.value, {}, {Type::Void}, {Statement::Form::Block, name, "", {Type::Void}, {}, {}}};
@@ -420,10 +488,18 @@ public:
             expect(Kind::RightParen, "Expected ')' after macro parameters.");
         }
         if (accept(Kind::Arrow)) result.result = type_spec(true);
-        if (name.value == "repr") fail(file, name, "repr is a built-in read-only macro function.");
+        if (name.value == "__repr__") fail(file, name, "__repr__ is a built-in read-only macro function.");
         if (name.value == "to_string" && result.result != TypeSpec{Type::String})
             fail(file, name, "to_string overloads must explicitly return string.");
         result.body = block();
+        unsigned line = tokens[start].line;
+        for (auto i = start; i < cursor; ++i) {
+            const auto& token = tokens[i];
+            while (line < token.line) { result.display += '\n'; ++line; }
+            if (i != start && tokens[i-1].type != Kind::FString && tokens[i-1].type != Kind::RawString) result.display += ' ';
+            result.display += token.type == Kind::StringLiteral ? quote(token.value) :
+                token.type == Kind::CharLiteral ? quote(token.value, '\'') : token.value;
+        }
         return result;
     }
 };
@@ -671,6 +747,54 @@ class Evaluator {
         if (!target) error(frame, expr.token, "Macro argument calls require an explicit macro member.");
         return invoke(*target, method, arguments, expr.token, file(frame));
     }
+    Value collection(Value value, Frame* frame, const Token& token) {
+        std::vector<std::pair<const Value*, unsigned>> pending{{&value, 1}};
+        while (!pending.empty()) {
+            const auto [item, depth] = pending.back(); pending.pop_back();
+            budget.step(file(frame), token);
+            if (depth > 128) error(frame, token, "Macro value nesting exceeds 128.");
+            if (type_of(*item) == Type::Void) error(frame, token, "Collections cannot contain void.");
+            if (const auto* a = std::get_if<Array>(item)) for (const auto& child : *a) pending.emplace_back(&child, depth+1);
+            if (const auto* o = std::get_if<Object>(item)) for (const auto& [key, child] : *o) pending.emplace_back(&child, depth+1);
+        }
+        return value;
+    }
+    Value member(const Expr& expr, Frame* frame) {
+        const auto& receiver = expr.children[0];
+        std::vector<Value> args;
+        for (std::size_t i = 1; i < expr.children.size(); ++i) args.push_back(eval(expr.children[i], frame));
+        const bool call = expr.form == Expr::Form::MemberCall;
+        if (receiver->form == Expr::Form::Name && macros.contains(receiver->name)) {
+            auto& macro = named_macro(receiver->name, frame, expr.token);
+            if (call) return invoke(macro, expr.name, args, expr.token, file(frame));
+            if (expr.name == "value") return macro.value;
+            if (expr.name == "expression") return macro.expression;
+            error(frame, expr.token, "Macro methods require '()'.");
+        }
+        auto value = eval(receiver, frame);
+        if (!call) {
+            if (const auto* object = std::get_if<Object>(&value)) {
+                if (const auto it = object->find(expr.name); it != object->end()) return it->second;
+            }
+            if (expr.name == "length") {
+                if (const auto* a = std::get_if<Array>(&value)) return static_cast<std::int64_t>(a->size());
+                if (const auto* o = std::get_if<Object>(&value)) return static_cast<std::int64_t>(o->size());
+                if (const auto* t = std::get_if<std::string>(&value))
+                    return static_cast<std::int64_t>(std::count_if(t->begin(), t->end(), [](unsigned char c){ return (c & 0xc0) != 0x80; }));
+            }
+        } else if (expr.name == "sorted" && args.empty() && std::holds_alternative<Array>(value)) {
+            auto result = std::get<Array>(value);
+            for (const auto& item : result) if (type_of(item) != Type::Int)
+                error(frame, expr.token, "sorted currently requires an int array.");
+            std::sort(result.begin(), result.end(), [](const Value& a, const Value& b){ return std::get<std::int64_t>(a) < std::get<std::int64_t>(b); });
+            return result;
+        } else if ((expr.name == "upper" || expr.name == "lower") && args.empty() && std::holds_alternative<std::string>(value)) {
+            auto result = std::get<std::string>(value);
+            for (auto& c : result) { if (expr.name == "upper" && c >= 'a' && c <= 'z') c -= 32; else if (expr.name == "lower" && c >= 'A' && c <= 'Z') c += 32; }
+            return result;
+        }
+        error(frame, expr.token, "Unknown object member or incompatible method arguments: '" + expr.name + "'.");
+    }
     void assign(Frame& frame, const Statement& statement, Value value) {
         if (type_of(value) == Type::Void) error(&frame, statement.token, "Cannot assign void in a macro.");
         if (auto* local = binding(&frame, statement.name)) {
@@ -743,6 +867,34 @@ public:
                 if (const auto* s = std::get_if<std::string>(&expr.value); s && s->size() > max_string)
                     error(frame, expr.token, "Macro string/source exceeds 1 MiB.");
                 return expr.value;
+            case Expr::Form::Member: case Expr::Form::MemberCall: return member(expr, frame);
+            case Expr::Form::Array: {
+                Array result;
+                for (const auto& child : expr.children) result.push_back(eval(child, frame));
+                return collection(std::move(result), frame, expr.token);
+            }
+            case Expr::Form::Object: {
+                Object result;
+                for (std::size_t i = 0; i < expr.children.size(); i += 2) {
+                    const auto key = std::get<std::string>(eval(expr.children[i], frame));
+                    if (result.contains(key)) error(frame, expr.token, "Duplicate object key.");
+                    result.emplace(key, eval(expr.children[i+1], frame));
+                }
+                return collection(std::move(result), frame, expr.token);
+            }
+            case Expr::Form::Index: {
+                const auto base = eval(expr.children[0], frame), index = eval(expr.children[1], frame);
+                if (const auto* a = std::get_if<Array>(&base)) {
+                    const auto n = integer(index, frame, expr.token);
+                    if (n < 0 || static_cast<std::size_t>(n) >= a->size()) error(frame, expr.token, "Array index out of range.");
+                    return (*a)[n];
+                }
+                if (const auto* o = std::get_if<Object>(&base); o && std::holds_alternative<std::string>(index)) {
+                    const auto it = o->find(std::get<std::string>(index));
+                    if (it != o->end()) return it->second;
+                }
+                error(frame, expr.token, "Invalid object index.");
+            }
             case Expr::Form::Name: return lookup(expr, frame);
             case Expr::Form::Binary: return binary(expr, frame);
             case Expr::Form::Call: return call(expr, frame);
@@ -774,9 +926,9 @@ public:
                 throw MacroError(macro.definition->location, "Macro representation exceeds 1 MiB.");
             result += piece;
         };
-        add("macro " + macro.definition->name + " { value = ");
+        add("macro " + macro.definition->name + " { value: ");
         add(text(macro.value, true));
-        add("; expression = ");
+        add("; expression: ");
         add(text(macro.expression, true));
         add("; functions = [");
         bool first = true;
@@ -798,8 +950,8 @@ public:
     Value invoke(Macro& macro, const std::string& name, const std::vector<Value>& args,
                  const Token& token, const std::string& caller_file) {
         budget.step(caller_file, token);
-        if (name == "repr") {
-            if (!args.empty()) fail(caller_file, token, "repr takes no arguments.");
+        if (name == "__repr__") {
+            if (!args.empty()) fail(caller_file, token, "__repr__ takes no arguments.");
             auto result = representation(macro);
             if (result.size() > max_string) fail(caller_file, token, "Macro representation exceeds 1 MiB.");
             return result;
@@ -889,11 +1041,15 @@ struct MacroEnvironment::Impl {
             const auto field = parser.expect(Kind::Identifier, "Expected 'value', 'expression' or contextual 'fn' in macro.");
             if ((field.value != "value" && field.value != "expression") || !fields.insert(field.value).second)
                 fail(file, field, "Unknown or duplicate macro field '" + field.value + "'.");
-            if (field.value == "expression") {
-                definition->nullable_expression = parser.accept(Kind::TernaryOp);
-                parser.expect(Kind::Colon, "Expected ':' after macro expression field.");
-            } else parser.expect(Kind::Equal, "Expected '=' after macro value field.");
-            auto expression = parser.expression();
+            parser.expect(Kind::Colon, "Expected ':' after macro field.");
+            Expression expression;
+            if (field.value == "expression" && parser.accept(Kind::TernaryOp)) {
+                definition->nullable_expression = true;
+                expression = parser.make_node(Expr{Expr::Form::Literal, field, {}, "", {}});
+            } else {
+                if (field.value == "expression") definition->nullable_expression = false;
+                expression = parser.expression();
+            }
             parser.terminator();
             initializers.push_back({field, field.value, std::move(expression)});
         }
@@ -927,17 +1083,13 @@ struct MacroEnvironment::Impl {
         Evaluator evaluator(macros, budget, file);
         std::string method = "to_string";
         const bool member = input[cursor].type == Kind::Point;
-        if (member) {
-            ++cursor;
-            if (input[cursor].type != Kind::Identifier) fail(file, input[cursor], "Expected macro member name.");
-            method = input[cursor++].value;
-        }
         Value result;
         const bool call = input[cursor].type == Kind::LeftParen;
-        if (member && !call && (method == "value" || method == "expression"))
-            result = method == "value" ? macro.value : macro.expression;
-        else {
-            if (member && !call) fail(file, invocation, "Macro methods require '()'.");
+        if (member) {
+            Parser parser(input, start, file);
+            result = evaluator.eval(parser.unary());
+            cursor = parser.cursor;
+        } else {
             std::vector<Value> arguments;
             if (call) {
                 Parser parser(input, cursor, file);
@@ -1021,6 +1173,22 @@ MacroEnvironment& MacroEnvironment::operator=(const MacroEnvironment& other) {
 }
 MacroEnvironment::MacroEnvironment(MacroEnvironment&&) noexcept = default;
 MacroEnvironment& MacroEnvironment::operator=(MacroEnvironment&&) noexcept = default;
+void MacroEnvironment::print(std::ostream& out) const {
+    auto display = [](const Value& value) {
+        try { return text(value, true); }
+        catch (const std::runtime_error&) { return std::string("<representation exceeds limit>"); }
+    };
+    for (const auto& [name, macro] : impl->macros) {
+        out << name << ":\n    value: " << display(macro.value)
+            << "\n    expression: " << display(macro.expression)
+            << "\n    method: to_string" << (macro.definition->functions.contains("to_string") ? " (overridden)" : " (built-in)") << "\n";
+        out << "    built-in: __repr__() -> string\n";
+        for (const auto& [method, overloads] : macro.definition->functions) {
+            for (const auto& function : overloads) out << "    " << function.display << "\n";
+        }
+        out << '\n';
+    }
+}
 bool MacroEnvironment::contains(const std::string& name) const { return impl->macros.contains(name); }
 void MacroEnvironment::define(const std::vector<Token>& input, std::size_t& cursor, const std::string& file) {
     if (input.empty() || input.back().type != Kind::EndOfFile || cursor >= input.size())

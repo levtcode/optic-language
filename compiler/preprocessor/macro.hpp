@@ -5,6 +5,7 @@
 #include "compiler/driver/diagnostics_engine.hpp"
 #include "compiler/lexer/tokens.hpp"
 #include <memory>
+#include <iosfwd>
 #include <stdexcept>
 #include <vector>
 
@@ -27,6 +28,7 @@ public:
     MacroEnvironment(MacroEnvironment&&) noexcept;
     MacroEnvironment& operator=(MacroEnvironment&&) noexcept;
 
+    void print(std::ostream& out) const;
     bool contains(const std::string& name) const;
     void define(const std::vector<lexer::token_t>& input, std::size_t& cursor,
                 const std::string& file);

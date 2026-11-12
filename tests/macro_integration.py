@@ -44,7 +44,7 @@ class MacroIntegration(unittest.TestCase):
 
     def test_requested_value_expression_and_special_methods(self):
         tokens = self.compile('''macro MyMacro {
-    value = -1;
+    value: -1;
     expression: "int value = "
     fn macro_funcion(int val) { value = val; }
     fn to_string() -> string { return f"{expression}{value};"; }
@@ -53,7 +53,7 @@ MyMacro
 MyMacro.macro_funcion(42);
 MyMacro
 MyMacro.to_string()
-MyMacro.repr()
+MyMacro.__repr__()
 ''')
         values = self.values(tokens)
         self.assertEqual(values[:6], [("Int", "int"), ("Identifier", "value"), ("Equal", "="),
@@ -61,17 +61,17 @@ MyMacro.repr()
         self.assertEqual(values[6:11], [("Int", "int"), ("Identifier", "value"), ("Equal", "="),
                                        ("IntegerLiteral", "42"), ("Semicolon", ";")])
         self.assertEqual(values[11], ("StringLiteral", "int value = 42;"))
-        self.assertEqual(values[12], ("StringLiteral", 'macro MyMacro { value = 42; expression = "int value = "; functions = [macro_funcion(int) -> void, to_string() -> string] }'))
+        self.assertEqual(values[12], ("StringLiteral", 'macro MyMacro { value: 42; expression: "int value = "; functions = [macro_funcion(int) -> void, to_string() -> string] }'))
         self.assertEqual({(line, column) for _, _, line, column, _ in tokens[:6]}, {("7", "1")})
         self.assertEqual(sum(token[0] == "EndOfFile" for token in tokens), 1)
 
     def test_default_to_string_and_literal_types(self):
-        tokens = self.compile('''macro Return { value = 12; expression: "return" }
-macro Text { value = "hello"; }
-macro Flag { value = true; }
-macro Number { value = 2.0; }
-macro Letter { value = '\\u03A9'; }
-macro Empty { value = null; expression?: null }
+        tokens = self.compile('''macro Return { value: 12; expression: "return" }
+macro Text { value: "hello"; }
+macro Flag { value: true; }
+macro Number { value: 2.0; }
+macro Letter { value: '\\u03A9'; }
+macro Empty { value: null; expression: ? }
 Return
 Text
 Flag
@@ -87,8 +87,8 @@ Empty.expression
 
     def test_nullable_expression_and_typed_parameters(self):
         tokens = self.compile('''macro M {
-    value = 1;
-    expression?: null
+    value: 1;
+    expression: ?
     fn set_expression(string? val) { expression = val; }
     fn pick(int? val) -> int { if val == null { return value; } else { return val; } }
 }
@@ -101,13 +101,13 @@ M
 ''')
         self.assertEqual(self.values(tokens), [("IntegerLiteral", "1"), ("IntegerLiteral", "8"),
             ("Return", "return"), ("IntegerLiteral", "1"), ("IntegerLiteral", "1")])
-        self.invalid('macro M { value = 1; expression: null }', "Expected macro type string")
-        self.invalid('macro M { value = 1; expression: ""; fn reset() { expression = null; } } M.reset();',
+        self.invalid('macro M { value: 1; expression: null }', "Expected macro type string")
+        self.invalid('macro M { value: 1; expression: ""; fn reset() { expression = null; } } M.reset();',
                      "Expected macro type string")
 
     def test_overloads_and_to_string_call_arguments(self):
         tokens = self.compile('''macro M {
-    value = 3;
+    value: 3;
     fn choose(int val) -> string { return "int"; }
     fn choose(float val) -> string { return "float"; }
     fn choose(string val) -> string { return val; }
@@ -125,12 +125,12 @@ M()
         self.assertEqual(self.values(tokens), [("StringLiteral", "int"), ("StringLiteral", "float"),
             ("StringLiteral", "text"), ("FloatLiteral", "2.5"), ("Return", "return"),
             ("IntegerLiteral", "12"), ("Semicolon", ";"), ("StringLiteral", "return 15;"), ("IntegerLiteral", "3")])
-        self.invalid('macro M { value = 1; fn f(int? x) {} fn f(string? x) {} } M.f(null);', "Ambiguous macro overload")
-        self.invalid('macro M { value = 1; fn f(int x) {} } M.f(true);', "No matching macro overload")
+        self.invalid('macro M { value: 1; fn f(int? x) {} fn f(string? x) {} } M.f(null);', "Ambiguous macro overload")
+        self.invalid('macro M { value: 1; fn f(int x) {} } M.f(true);', "No matching macro overload")
 
     def test_typed_locals_scopes_loops_and_return(self):
         tokens = self.compile('''macro M {
-    value = 0;
+    value: 0;
     fn factorial(int n) -> int {
         int result = 1;
         while n > 1 { result *= n; n -= 1; }
@@ -154,7 +154,7 @@ M.recursive(6)
 
     def test_arithmetic_short_circuit_and_explicit_conversions(self):
         tokens = self.compile('''macro M {
-    value = 1;
+    value: 1;
     fn arithmetic() -> int { return ((2 + 3 * 4) << 1) | 1; }
     fn safe() -> bool { return false and (1 / 0 > 0) or true || (1 / 0 > 0); }
     fn conversions() -> string { return f"{int(2.9)}:{float(3)}:{bool(0)}:{string(null)}:{char('x')}"; }
@@ -170,7 +170,7 @@ M.power()
 
     def test_fstrings_raw_strings_and_escaping(self):
         tokens = self.compile(r'''macro M {
-    value = "a\n\"b\\c";
+    value: "a\n\"b\\c";
     fn formatted(int n) -> string { return f"{{{n + 1}}}:{value}"; }
     fn raw() -> string { return r"\n"; }
     fn plain() -> string { "void"; return "void"; }
@@ -184,18 +184,18 @@ M.plain()
             ("StringLiteral", '{3}:a\n"b\\c'), ("StringLiteral", "\\n"), ("StringLiteral", "void")])
 
     def test_recursive_expansion_and_empty_code(self):
-        tokens = self.compile('''macro A { value = 1; fn to_string() -> string { return "B"; } }
-macro B { value = 9; }
-macro Empty { value = 0; fn to_string() -> string { return ""; } }
+        tokens = self.compile('''macro A { value: 1; fn to_string() -> string { return "B"; } }
+macro B { value: 9; }
+macro Empty { value: 0; fn to_string() -> string { return ""; } }
 A
 Empty
 ''')
         self.assertEqual(self.values(tokens), [("IntegerLiteral", "9")])
 
     def test_generated_multiline_calls_keep_statement_boundaries(self):
-        tokens = self.compile(r'''macro M { value = 1; fn set(int n) { value = n; } }
+        tokens = self.compile(r'''macro M { value: 1; fn set(int n) { value = n; } }
 macro Generator {
-    value = 0;
+    value: 0;
     fn to_string() -> string { return "M.set(2)\nM.value"; }
 }
 Generator
@@ -205,7 +205,7 @@ M.value
         self.assertEqual(tokens[0][2:4], ("6", "1"))
 
     def test_imported_macros_and_module_state_isolation(self):
-        self.source("dep.optic", 'macro Shared { value = 1; fn set(int n) { value = n; } }\n')
+        self.source("dep.optic", 'macro Shared { value: 1; fn set(int n) { value = n; } }\n')
         self.source("left.optic", 'import "dep.optic"\nShared.set(2);\n')
         self.source("right.optic", 'import "dep.optic"\nShared.set(3);\n')
         main = self.source("main.optic", 'import "left.optic"\nShared.value\nimport "right.optic"\nShared.value\nimport "dep.optic"\nShared.value\n')
@@ -220,38 +220,38 @@ M.value
         self.assertEqual(sum(token[0] == "EndOfFile" for token in tokens), 5)
 
     def test_import_name_conflicts(self):
-        self.source("one.optic", "macro M { value = 1; }")
-        self.source("two.optic", "macro M { value = 2; }")
+        self.source("one.optic", "macro M { value: 1; }")
+        self.source("two.optic", "macro M { value: 2; }")
         self.invalid('import "one.optic"\nimport "two.optic"\n', "Imported macro name conflict")
-        self.invalid('import "one.optic"\nmacro M { value = 2; }', "Duplicate or reserved macro name")
+        self.invalid('import "one.optic"\nmacro M { value: 2; }', "Duplicate or reserved macro name")
 
     def test_function_keywords_are_contextual_and_removed_constructs_are_identifiers(self):
         tokens = self.compile('int fn = 1; int directive = 2; int compiletime = 3; int Macro = 4;')
         self.assertEqual([value for kind, value in self.values(tokens) if kind == "Identifier"],
                          ["fn", "directive", "compiletime", "Macro"])
-        tokens = self.compile('macro Legacy { value = 4; } Legacy')
+        tokens = self.compile('macro Legacy { value: 4; } Legacy')
         self.assertEqual(self.values(tokens), [("IntegerLiteral", "4")])
 
     def test_malformed_definitions_and_types(self):
         cases = [
             ('macro M { expression: "x" }', "requires a 'value'"),
-            ('macro M { value = 1; value = 2; }', "duplicate macro field"),
-            ('macro M { value = 1; unknown = 2; }', "Unknown or duplicate"),
-            ('macro M { value = 1; fn f(x) {} }', "explicit macro type"),
-            ('macro M { value = 1; fn f(int x, int x) {} }', "parameter name"),
-            ('macro M { value = 1; fn f(int x) {} fn f(int y) {} }', "Duplicate macro function signature"),
-            ('macro M { value = 1; fn to_string() { return "x"; } }', "explicitly return string"),
-            ('macro M { value = 1; fn repr() -> string { return "x"; } }', "read-only"),
-            ('macro M { value = 1; fn f() -> int {} } M.f()', "got void"),
-            ('macro M { value = 1; fn f() -> int { return "bad"; } } M.f()', "got string"),
-            ('macro M { value = 1; fn f() { missing = 2; } } M.f();', "undeclared macro variable"),
-            ('macro M { value = 1; fn f() { int n = "bad"; } } M.f();', "got string"),
-            ('macro M { value = 1; fn f() { if 1 {} } } M.f();', "must be bool"),
-            ('function main() { macro M { value = 1; } }', "module scope"),
-            ('macro M { value = 1; } M.unknown()', "No matching"),
-            ('macro M { value = 1; } M.repr(1)', "no arguments"),
-            ('macro M { value = 1; } M.unknown', "require '()'"),
-            ('macro M { value = 1; fn set(int n) { value = n; } } int x = M.set(2);', "standalone statement"),
+            ('macro M { value: 1; value = 2; }', "duplicate macro field"),
+            ('macro M { value: 1; unknown = 2; }', "Unknown or duplicate"),
+            ('macro M { value: 1; fn f(x) {} }', "explicit macro type"),
+            ('macro M { value: 1; fn f(int x, int x) {} }', "parameter name"),
+            ('macro M { value: 1; fn f(int x) {} fn f(int y) {} }', "Duplicate macro function signature"),
+            ('macro M { value: 1; fn to_string() { return "x"; } }', "explicitly return string"),
+            ('macro M { value: 1; fn __repr__() -> string { return "x"; } }', "read-only"),
+            ('macro M { value: 1; fn f() -> int {} } M.f()', "got void"),
+            ('macro M { value: 1; fn f() -> int { return "bad"; } } M.f()', "got string"),
+            ('macro M { value: 1; fn f() { missing = 2; } } M.f();', "undeclared macro variable"),
+            ('macro M { value: 1; fn f() { int n = "bad"; } } M.f();', "got string"),
+            ('macro M { value: 1; fn f() { if 1 {} } } M.f();', "must be bool"),
+            ('function main() { macro M { value: 1; } }', "module scope"),
+            ('macro M { value: 1; } M.unknown()', "No matching"),
+            ('macro M { value: 1; } M.__repr__(1)', "no arguments"),
+            ('macro M { value: 1; } M.unknown', "require '()'"),
+            ('macro M { value: 1; fn set(int n) { value = n; } } int x = M.set(2);', "standalone statement"),
         ]
         for source, message in cases:
             with self.subTest(source=source):
@@ -278,31 +278,72 @@ M.value
             ("1e1000", "finite and representable"),
         ]:
             with self.subTest(expression=expression):
-                self.invalid(f"macro M {{ value = {expression}; }} M", message)
-        tokens = self.compile('macro M { value = -9223372036854775808; } M')
+                self.invalid(f"macro M {{ value: {expression}; }} M", message)
+        tokens = self.compile('macro M { value: -9223372036854775808; } M')
         self.assertEqual(self.values(tokens), [("Minus", "-"), ("IntegerLiteral", "9223372036854775808")])
 
     def test_invalid_generated_code_and_interpolation(self):
         for result, message in [("@", "Invalid macro source"), ("/*", "Invalid macro source"),
                                 ("(", "Unbalanced delimiters"), ("}", "Unbalanced delimiters"),
                                 ('import "missing.optic"', "cannot introduce imports"),
-                                ("macro N { value = 1; }", "cannot introduce imports")]:
+                                ("macro N { value: 1; }", "cannot introduce imports")]:
             with self.subTest(result=result):
                 escaped = result.replace('\\', '\\\\').replace('"', '\\"')
-                self.invalid(f'macro M {{ value = 1; fn to_string() -> string {{ return "{escaped}"; }} }} M', message)
+                self.invalid(f'macro M {{ value: 1; fn to_string() -> string {{ return "{escaped}"; }} }} M', message)
         for expression in ('f"{"', 'f"}"', 'f"{value +}"', 'f"{unknown}"'):
             with self.subTest(expression=expression):
-                self.invalid(f'macro M {{ value = 1; fn text() -> string {{ return {expression}; }} }} M.text()', "macro")
+                self.invalid(f'macro M {{ value: 1; fn text() -> string {{ return {expression}; }} }} M.text()', "macro")
+
+    def test_collections_members_and_debug_state(self):
+        tokens = self.compile('''macro M {
+            value: [5, 4, 2, 1, 3]
+            expression: ?
+            fn sort_value() -> bool { value = value.sorted(); return true; }
+            fn size() -> int { return value.length; }
+            fn size(int unused) -> int { return value.length; }
+        }
+        macro Text { value: "hello"; fn size() -> int { return value.length; } }
+        macro Obj { value: {name: "Ada", items: [2, 3]}; }
+        M.sort_value()
+        M.value[0]
+        M.size()
+        Text.value.upper()
+        Text.size()
+        Obj.value.name
+        Obj.value.items[1]
+        ''')
+        self.assertEqual(self.values(tokens), [("LiteralTrue", "true"), ("IntegerLiteral", "1"),
+            ("IntegerLiteral", "5"), ("StringLiteral", "HELLO"), ("IntegerLiteral", "5"),
+            ("StringLiteral", "Ada"), ("IntegerLiteral", "3")])
+        result = self.run_compiler(self.root / "main.optic")
+        self.assertIn(b"----- PREPROCESSOR MACROS -----", result.stdout)
+        self.assertIn(b"value: [1, 2, 3, 4, 5]", result.stdout)
+        self.assertIn(b"expression: null", result.stdout)
+        self.assertIn(b"fn size ( ) -> int", result.stdout)
+        self.assertIn(b"fn size ( int unused ) -> int", result.stdout)
+        build = subprocess.run([str(OPTICC), "build", str(self.root / "main.optic")],
+                               capture_output=True, timeout=15)
+        self.assertNotIn(b"PREPROCESSOR MACROS", build.stdout)
+        dep = self.source("dep.optic", "macro Imported { value: true; expression: ? }")
+        imported = self.source("imported.optic", 'import "dep.optic"\n')
+        imported_result = self.run_compiler(imported)
+        self.assertEqual(imported_result.returncode, 0, imported_result.stderr)
+        self.assertIn(b"[preprocessor] Imported " + str(dep).encode(), imported_result.stdout)
+        self.assertIn(b"Imported:\n    value: true", imported_result.stdout)
+        self.invalid('macro M { value: [1]; } M.value[3]', "out of range")
+        self.invalid('macro M { value: 1; fn nest() { while true { value = [value]; } } } M.nest();', "nesting exceeds")
+        self.invalid('macro M { value = 1; }', "Expected ':'")
+        self.invalid('macro M { value: 1; } M.repr()', "No matching")
 
     def test_limits_stop_recursion_loops_and_oversized_strings(self):
-        self.invalid('macro M { value = 0; fn run() { while true {} } } M.run();', "100000 steps")
-        self.invalid('macro M { value = 0; fn run() { run(); } } M.run();', "exceeds")
-        self.invalid('macro M { value = 0; fn to_string() -> string { return "M"; } } M', "64 levels")
-        self.invalid('''macro M { value = "x";
+        self.invalid('macro M { value: 0; fn run() { while true {} } } M.run();', "100000 steps")
+        self.invalid('macro M { value: 0; fn run() { run(); } } M.run();', "exceeds")
+        self.invalid('macro M { value: 0; fn to_string() -> string { return "M"; } } M', "64 levels")
+        self.invalid('''macro M { value: "x";
             fn grow() { int i = 0; while i < 21 { value = value + value; i += 1; } }
         } M.grow();''', "1 MiB")
         self.invalid('''macro Many {
-            value = 0;
+            value: 0;
             fn to_string() -> string {
                 string result = ";";
                 int n = 0;

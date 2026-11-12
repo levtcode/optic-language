@@ -1,3 +1,7 @@
+> Macro support is paused. The macro implementation and historical tests are
+> retained but excluded from builds and active tests. Macro declarations are
+> rejected explicitly; no macro evaluation, expansion or Debug inventory runs.
+
 # Optic CLI and component architecture
 
 `optic` is a short-lived command-line coordinator. `opticc` is an independent
@@ -27,7 +31,7 @@ with `-DBUILD_TESTING=OFF`.
 
 `optic_frontend` is an internal static library shared by the compiler and C++
 contract tests. The coordinator does not link it. This library does not implement
-the future runtime-language parser; macro functions have a private preprocessing
+the future runtime-language parser; the dormant macro implementation contains a private preprocessing
 grammar.
 
 Both tools install into `bin/`. When running directly from a build directory,
@@ -106,7 +110,7 @@ subsystems nested under `optic::compiler`:
 | `optic::cli` | `CliTool`, component discovery and process execution. |
 | `optic::compiler::driver` | `CompilerInstance`, configuration, diagnostics, `Module`, `ModuleGraph` and compiler argument helpers. |
 | `optic::compiler::lexer` | `Lexer`, tokens, lookup tables and operator trie. |
-| `optic::compiler::preprocessor` | Token preprocessing, import loading and typed macro evaluation. |
+| `optic::compiler::preprocessor` | Token preprocessing, import loading with macro support paused. |
 
 Namespaces describe subsystems, not individual files. For example, `Module`
 belongs to the driver, so there is no `module` namespace. The future parser
