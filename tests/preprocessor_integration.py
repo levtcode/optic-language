@@ -109,6 +109,27 @@ class PreprocessorIntegration(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn(b"Import nesting exceeds", result.stderr)
 
+    def test_macros_are_disabled_without_evaluation(self):
+        main = self.source("main.optic", "macro M { value: 1 / 0; expression: ? }\nM\n")
+        result = self.run_compiler(main)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(b"Macros are currently disabled", result.stderr)
+        self.assertNotIn(b"Division by zero", result.stderr)
+        self.assertNotIn(b"PREPROCESSOR MACROS", result.stdout)
+        self.source("dep.optic", "macro M { value: 42; }\n")
+        main.write_text('import "dep.optic"\nM\n')
+        result = self.run_compiler(main)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(b"Macros are currently disabled", result.stderr)
+
+    def test_identifiers_are_not_expanded(self):
+        main = self.source("main.optic", "M.to_string()\n")
+        result = self.run_compiler(main)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(b"Token value: 'M'", result.stdout)
+        self.assertIn(b"Token value: 'to_string'", result.stdout)
+        self.assertNotIn(b"PREPROCESSOR MACROS", result.stdout)
+
     def test_debug_mode_is_independent_of_build_configuration(self):
         main = self.source("main.optic", "hello")
         self.assertIn(b"MODULE DEPENDENCIES", self.run_compiler(main).stdout)

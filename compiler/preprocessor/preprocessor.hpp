@@ -3,8 +3,6 @@
  */
 #pragma once
 #include "compiler/driver/module.hpp"
-#include "compiler/preprocessor/macro.hpp"
-#include <unordered_map>
 
 namespace optic::compiler::driver { class CompilerContext; }
 namespace optic::compiler::preprocessor {
@@ -17,7 +15,6 @@ public:
 
 private:
     driver::CompilerContext& context;
-    std::unordered_map<driver::ModuleID, MacroEnvironment> macro_environments;
     driver::ModuleID load(const std::filesystem::path& path, const driver::SourceLocation& loc);
     bool process(driver::ModuleID id, std::size_t depth);
     void error(const driver::Module& module, const lexer::token_t& token, const std::string& message);

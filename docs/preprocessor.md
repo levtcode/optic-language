@@ -42,22 +42,16 @@ with input/discovery order breaking ties. Dependency edges retain declaration
 order and duplicates are ignored. Rebuilding the order never appends stale
 entries.
 
-## Macros
+## Macros (inactive)
 
-`macro` declarations contain a value, an optional nullable expression prefix,
-and typed compile-time functions. Bare macro names inject the source returned
-by `to_string`; explicit member calls can update state or return scalar values.
-See [macro declarations and evaluation](macros.md) for the complete syntax,
-overload rules, special functions and execution limits.
-
-Imported modules export their visible macro definitions. Imports copy field
-state into the importer; they do not share mutable state between modules.
-Definitions with the same origin are deduplicated (including diamond imports),
-while conflicting names from different definitions are errors. A repeated import
-never resets a macro that the importer has already changed. When two import
-paths provide different field snapshots of the same definition, the first
-visible snapshot wins. Visibility follows source order, including imports;
-there is no declaration hoisting.
+Macro support is paused. The implementation remains in `macro.hpp`/`macro.cpp`
+but is excluded from the compiler target and active test suite. Preprocessing
+creates no macro environments, evaluates no macro bodies, imports no definitions
+and performs no macro expansion. Debug output lists imports and module/token
+information, with no macro inventory. A `macro` declaration fails explicitly
+with "Macros are currently disabled."; its body is never executed. Ordinary
+identifiers pass through unchanged. There is no compiler flag to enable macros.
+Historical design and examples remain in [macros.md](macros.md).
 
 `directive` and `compiletime` have been removed as language constructs and token
 kinds. Both spellings are now ordinary identifiers. Platform APIs belong in a
@@ -78,11 +72,6 @@ on demand and updates the existing modules. There is no separate
 `PreprocessedModule`, secondary dependency graph, combined source buffer or
 unimplemented `SourceManager` API. Import statements are removed from the parser
 token stream; dependencies remain available through `Module::get_dependencies()`.
-
-Macro environments live only for the preprocessing session. Definitions use a
-private macro parser and immutable function bodies; importing a definition
-copies its field state. The `optic_frontend` static library shares this code
-between `opticc` and its contract tests, independently of the `optic` CLI.
 
 The future parser should iterate `ModuleGraph::compilation_order()`, parse each
 ready module separately, and associate its AST with that module's ID. A token's
@@ -128,9 +117,5 @@ ctest --test-dir build --output-on-failure
 The C++ `frontend` checks exercise graph invariants, token positions, escapes,
 operators and malformed lexical inputs. Python `preprocessor_integration`
 checks real compiler sessions, import ordering, path aliases, cycles, failures,
-EOF handling and inspection mode. `macros` checks environment transactions,
-import isolation, all truncated token prefixes and 500 mutated declarations.
-`macro_integration` exercises real invocations, overloads, nullable values,
-special functions, arithmetic, recursion, generated-source validation and
-execution limits. Existing CLI integration checks also run.
-
+EOF handling and inspection mode. The macro contract and integration test files are preserved as historical
+fixtures and are not registered with CTest while macro support is paused.

@@ -30,7 +30,6 @@ add_library(optic_frontend STATIC
     compiler/driver/module.cpp
     compiler/lexer/lexer.cpp
     compiler/preprocessor/preprocessor.cpp
-    compiler/preprocessor/macro.cpp
 )
 optic_configure_target(optic_frontend)
 add_executable(opticc compiler/opticc.cpp compiler/driver/args.cpp
@@ -45,13 +44,11 @@ include(CTest)
 if(BUILD_TESTING)
     add_executable(optic_frontend_tests tests/frontend.cpp)
     target_link_libraries(optic_frontend_tests PRIVATE optic_frontend)
-    add_executable(optic_macro_tests tests/macros.cpp)
-    optic_configure_target(optic_macro_tests)
-    target_link_libraries(optic_macro_tests PRIVATE optic_frontend)
-    add_test(NAME macros COMMAND optic_macro_tests)
+    # Macro implementation and historical tests are retained, but intentionally
+    # excluded from build targets and active tests while the feature is paused.
     optic_configure_target(optic_frontend_tests)
     add_test(NAME frontend COMMAND optic_frontend_tests)
-    set_tests_properties(frontend macros PROPERTIES TIMEOUT 30)
+    set_tests_properties(frontend PROPERTIES TIMEOUT 30)
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
         add_executable(optic_test_component tests/cli_component.cpp)
@@ -61,8 +58,6 @@ if(BUILD_TESTING)
             "$<TARGET_FILE:optic_test_component>")
         add_test(NAME preprocessor_integration COMMAND "${Python3_EXECUTABLE}"
             "${PROJECT_SOURCE_DIR}/tests/preprocessor_integration.py" "$<TARGET_FILE:opticc>")
-        add_test(NAME macro_integration COMMAND "${Python3_EXECUTABLE}"
-            "${PROJECT_SOURCE_DIR}/tests/macro_integration.py" "$<TARGET_FILE:opticc>")
-        set_tests_properties(cli_integration preprocessor_integration macro_integration PROPERTIES TIMEOUT 90)
+        set_tests_properties(cli_integration preprocessor_integration PROPERTIES TIMEOUT 90)
     endif()
 endif()

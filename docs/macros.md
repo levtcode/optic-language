@@ -1,4 +1,11 @@
-# Macro declarations and evaluation
+# Macro declarations and evaluation (inactive)
+
+**Status: paused.** This document preserves the experimental design for future
+work. `macro.cpp` and its historical tests remain in the repository but are not
+built or run. The compiler rejects `macro` declarations with "Macros are currently
+disabled." It creates no macro environments, executes no functions, expands no
+names and emits no macro inventory in Debug mode. There is no enable flag.
+The sections below describe the dormant implementation, not active functionality.
 
 Macros are compile-time objects with a mutable `value`, an `expression` prefix,
 and typed functions. They are processed before the runtime Optic parser.
