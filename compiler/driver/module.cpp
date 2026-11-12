@@ -2,6 +2,7 @@
  * @brief Canonical module identity and deterministic dependency ordering.
  */
 #include "module.hpp"
+
 #include <algorithm>
 #include <limits>
 #include <ostream>

@@ -2,6 +2,7 @@
  * @brief Token preprocessing over the driver's source modules.
  */
 #pragma once
+
 #include "compiler/driver/module.hpp"
 
 namespace optic::compiler::driver { class CompilerContext; }

@@ -6,6 +6,7 @@
 #include "macro.hpp"
 #include "compiler/driver/module.hpp"
 #include "compiler/lexer/lexer.hpp"
+
 #include <algorithm>
 #include <charconv>
 #include <cctype>

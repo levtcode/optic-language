@@ -8,6 +8,7 @@
 #pragma once
 
 #include "compiler/lexer/tokens.hpp"
+
 #include <unordered_map>
 #include <string_view>
 

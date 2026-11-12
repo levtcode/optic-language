@@ -2,7 +2,9 @@
  * @brief Location-preserving lexical analysis of one source module.
  */
 #pragma once
+
 #include "compiler/driver/module.hpp"
+
 #include <string>
 #include <vector>
 

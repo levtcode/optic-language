@@ -5,6 +5,7 @@
 
 #include "compiler/driver/diagnostics_engine.hpp"
 #include "compiler/lexer/tokens.hpp"
+
 #include <cstdint>
 #include <filesystem>
 #include <map>

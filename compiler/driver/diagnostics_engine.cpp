@@ -6,6 +6,7 @@
  */
 
 #include "compiler/driver/diagnostics_engine.hpp"
+
 #include <iostream>
 #include <format>
 

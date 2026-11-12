@@ -2,8 +2,10 @@
  * @brief Typed macro definitions, module environments and expansion diagnostics.
  */
 #pragma once
+
 #include "compiler/driver/diagnostics_engine.hpp"
 #include "compiler/lexer/tokens.hpp"
+
 #include <memory>
 #include <iosfwd>
 #include <stdexcept>

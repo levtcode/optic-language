@@ -9,6 +9,7 @@
 #include "compiler/driver/args.hpp"
 #include "compiler/preprocessor/preprocessor.hpp"
 #include "compiler/lexer/lexer.hpp"
+
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -84,7 +85,6 @@ int CompilerInstance::get_flag_value(
     const std::string& flag_name
 ) const {
     const auto& flags = compiler_context.config().flags;
-
     const auto it = flags.find(flag_name);
 
     if (it == flags.end()) {
@@ -170,7 +170,6 @@ void CompilerInstance::cli_tooling(int argc, char** argv) noexcept {
                     "Supported value types: int, double, bool and string.\n",
                     DiagnosticsLevel::Error
                 );
-
                 continue;
             }
 
@@ -206,7 +205,6 @@ void CompilerInstance::cli_tooling(int argc, char** argv) noexcept {
             }
 
             config.set_option(option_name, value);
-
             continue;
         }
 

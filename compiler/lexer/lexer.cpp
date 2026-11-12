@@ -3,6 +3,7 @@
  */
 #include "compiler/lexer/lexer.hpp"
 #include "compiler/lexer/tables.hpp"
+
 #include <cctype>
 #include <cstdio>
 #include <iostream>
