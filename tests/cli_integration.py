@@ -108,6 +108,20 @@ class CliIntegration(unittest.TestCase):
         dash_source = self.source("-dash.optic")
         self.assertEqual(self.run_tool(OPTICC, "debug", "--", dash_source.name).returncode, 0)
 
+    def test_debug_two_sources_in_vscode_through_cli(self):
+        directory = self.directory / ".vscode"
+        directory.mkdir()
+        (directory / "file1.optic").write_text('import file2\nfunction main() { print(hello("levtcode")) return 0 }\n')
+        (directory / "file2.optic").write_text('function hello(string name) { return "Hola " + name + "!"; }\n')
+        # Use sibling compiler discovery, as in optic debug .vscode/file1.optic .vscode/file2.optic.
+        result = self.run_tool(OPTIC, "debug", ".vscode/file1.optic", ".vscode/file2.optic")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(b"[opticc] Executable:", result.stdout)
+        self.assertIn(b"[preprocessor] Imported " + str(directory / "file2.optic").encode(), result.stdout)
+        self.assertIn(b"Modules: 2, edges: 1, ready: 2, failed: 0", result.stdout)
+        self.assertIn(b"Dependency-first order: [2, 1]", result.stdout)
+        self.assertEqual(result.stdout.count(b"Token value: 'hello'"), 2)
+
     def test_compiler_errors_and_backend_limitations(self):
         source = self.source()
         for arguments in (("debug",), ("debug", ""), ("debug", "--unknown", source),

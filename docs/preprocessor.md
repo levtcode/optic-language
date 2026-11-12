@@ -119,3 +119,39 @@ operators and malformed lexical inputs. Python `preprocessor_integration`
 checks real compiler sessions, import ordering, path aliases, cycles, failures,
 EOF handling and inspection mode. The macro contract and integration test files are preserved as historical
 fixtures and are not registered with CTest while macro support is paused.
+
+## Debug trace and graph inspection
+
+Run `./build/optic debug .vscode/file1.optic .vscode/file2.optic` to select runtime
+Debug mode. Both files may be supplied even when one imports the other; canonical
+identity ensures each module is lexed once. A CMake Debug build alone does not
+select this mode. `build` and `run` commands do not emit the inspection output.
+
+Debug first prints the invoked opticc path (`argv[0]`), version and runtime mode.
+When the coordinator launches an unexpected compiler, inspect this path and the
+`OPTIC_COMPILER` override described in [CLI discovery](cli.md). Rebuild both
+executables with `cmake --build build` after source changes. No specific stale
+binary or invocation fault was established for the reported missing import log;
+the two-file reproduction prints it both directly and through the coordinator.
+
+The preprocessor logs module loading/reuse, processing depth, source byte and
+lexical token counts, import locations and resolved paths, successful edges,
+and loading/processing failures. A reused dependency still produces a successful
+import log. Logs use the same runtime Debug condition as the other frontend dumps.
+
+The summary lists input count, unique loaded modules, import requests, successful
+and failed imports, lexical tokens and new errors. Import counts refer to
+statements encountered, so repeated imports count separately while graph edges
+remain unique. Token counts exclude EOF.
+
+The graph prints all loaded modules, including failed ones: stable IDs, canonical
+paths, processing state, source bytes, output token counts, dependency IDs and
+reverse edges (`Imported by`). It also prints dependency-first order with paths.
+Rejected cycle edges appear in diagnostics/trace, not in the graph's accepted
+edges. An order containing failed nodes is inspection data, not a compilation of
+those modules. Unreadable paths have no loaded graph node.
+
+The graph and summary remain visible after preprocessing errors. Parser token
+output is explicitly skipped on failure, so partial streams are not presented
+as successful frontend output. Existing per-module token dumps remain available
+after success, and macros stay inactive.

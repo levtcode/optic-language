@@ -94,17 +94,50 @@ bool ModuleGraph::topological_sort() {
 }
 
 void ModuleGraph::print(std::ostream& out) const {
-    out << "\n----- MODULE DEPENDENCIES -----\n";
-    for (const auto id : ordered_modules) {
-        const auto* module = get_module(id);
-        out << module->get_path() << " -> [";
-        bool first = true;
+    std::map<ModuleID, std::vector<ModuleID>> dependents;
+    std::size_t edges = 0, ready = 0, failed = 0;
+    for (const auto& [id, module] : modules) {
+        ready += module->state() == ModuleState::Ready;
+        failed += module->state() == ModuleState::Failed;
         for (const auto dep : module->dependencies) {
-            if (!first) out << ", ";
-            out << get_module(dep)->get_path();
-            first = false;
+            dependents[dep].push_back(id);
+            ++edges;
         }
-        out << "]\n";
     }
+    out << "\n----- MODULE DEPENDENCIES -----\n"
+        << "Modules: " << modules.size() << ", edges: " << edges
+        << ", ready: " << ready << ", failed: " << failed << '\n';
+    auto print_ids = [&](const std::vector<ModuleID>& ids) {
+        out << '[';
+        for (std::size_t i = 0; i < ids.size(); ++i) {
+            if (i) out << ", ";
+            out << ids[i];
+        }
+        out << ']';
+    };
+    for (const auto& [id, module] : modules) {
+        const char* state = "loaded";
+        switch (module->state()) {
+            case ModuleState::Loaded: break;
+            case ModuleState::Processing: state = "processing"; break;
+            case ModuleState::Ready: state = "ready"; break;
+            case ModuleState::Failed: state = "failed"; break;
+        }
+        out << "Module [" << id << "]: " << module->get_path() << '\n'
+            << "  State: " << state << "\n  Source bytes: " << module->get_buffer().size()
+            << "\n  Output tokens (excluding EOF): " <<
+                (module->tokens.empty() ? 0 : module->tokens.size() - 1) << "\n  Dependencies: ";
+        print_ids(module->dependencies);
+        out << "\n  Imported by: ";
+        print_ids(dependents[id]);
+        out << '\n';
+    }
+    out << "Dependency-first order: ";
+    print_ids(ordered_modules);
+    out << '\n';
+    for (std::size_t i = 0; i < ordered_modules.size(); ++i)
+        out << "  " << i + 1 << ". [" << ordered_modules[i] << "] "
+            << get_module(ordered_modules[i])->get_path() << '\n';
+    out << "Order describes accepted edges; failed modules are not compiled.\n";
 }
 } // namespace optic::compiler::driver

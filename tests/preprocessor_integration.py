@@ -109,6 +109,51 @@ class PreprocessorIntegration(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn(b"Import nesting exceeds", result.stderr)
 
+    def test_debug_reports_imports_graph_reuse_and_counts(self):
+        dep = self.source("dep.optic", "dependency")
+        main = self.source("main.optic", 'import dep\nimport dep\nmain_value')
+        for files in ((main, dep), (dep, main)):
+            with self.subTest(files=files):
+                result = self.run_compiler(*files)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(b"[opticc] Mode: debug", result.stdout)
+                self.assertIn(b"[preprocessor] Imported " + str(dep).encode(), result.stdout)
+                self.assertIn(b"Reusing module", result.stdout)
+                self.assertIn(b"Already processed module", result.stdout)
+                self.assertIn(b"Import requests: 2", result.stdout)
+                self.assertIn(b"Successful imports: 2", result.stdout)
+                self.assertIn(b"Failed imports: 0", result.stdout)
+                self.assertIn(b"Modules: 2, edges: 1, ready: 2, failed: 0", result.stdout)
+                self.assertIn(b"Imported by:", result.stdout)
+                self.assertIn(b"Dependency-first order:", result.stdout)
+                self.assertEqual(result.stdout.count(b"Token value: 'dependency'"), 1)
+        for mode in ("build", "run"):
+            result = self.run_compiler(main, dep, mode=mode)
+            for marker in (b"[opticc]", b"[preprocessor]", b"PREPROCESSOR SUMMARY", b"MODULE DEPENDENCIES"):
+                self.assertNotIn(marker, result.stdout)
+
+    def test_debug_graph_is_visible_when_preprocessing_fails(self):
+        self.source("good.optic", "ready")
+        main = self.source("main.optic", 'import good\nimport missing\n')
+        result = self.run_compiler(main)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(b"Result: failed", result.stdout)
+        self.assertIn(b"Load failed", result.stdout)
+        self.assertIn(b"Modules: 2, edges: 1, ready: 1, failed: 1", result.stdout)
+        self.assertIn(b"Successful imports: 1", result.stdout)
+        self.assertIn(b"Failed imports: 1", result.stdout)
+        self.assertIn(b"Token dump skipped", result.stdout)
+        self.assertNotIn(b"Token type:", result.stdout)
+        missing = self.run_compiler("absent.optic")
+        self.assertIn(b"Modules: 0, edges: 0", missing.stdout)
+        self.assertIn(b"Result: failed", missing.stdout)
+        self.source("a.optic", 'import b\n')
+        self.source("b.optic", 'import a\n')
+        cycle = self.run_compiler("a.optic")
+        self.assertIn(b"Import cycle", cycle.stderr)
+        self.assertIn(b"ready: 0, failed: 2", cycle.stdout)
+        self.assertIn(b"Order describes accepted edges", cycle.stdout)
+
     def test_macros_are_disabled_without_evaluation(self):
         main = self.source("main.optic", "macro M { value: 1 / 0; expression: ? }\nM\n")
         result = self.run_compiler(main)
