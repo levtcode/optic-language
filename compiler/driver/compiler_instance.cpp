@@ -9,6 +9,8 @@
 #include "compiler/driver/args.hpp"
 #include "compiler/preprocessor/preprocessor.hpp"
 #include "compiler/lexer/lexer.hpp"
+#include "compiler/parser/parser.hpp"
+#include "compiler/ast/dump.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -268,7 +270,26 @@ void CompilerInstance::preprocess() noexcept {
 
 /* */
 void CompilerInstance::parsing() noexcept {
-    // TODO
+    auto& trees = compiler_context.syntax_trees();
+    trees.clear();
+    try {
+        auto& modules = compiler_context.modules();
+        for (const auto id : modules.compilation_order()) {
+            const auto& module = *modules.get_module(id);
+            if (module.state() != ModuleState::Ready) continue;
+            parser::Parser parser(id, module, compiler_context.diagnostics());
+            if (auto tree = parser.parse()) {
+                if (compiler_context.config().mode == CompilerMode::Debug) {
+                    std::cout << "\n----- AST: " << module.get_path() << " -----\n";
+                    ast::dump(*tree, std::cout);
+                }
+                trees.emplace(id, std::move(tree));
+            }
+        }
+    } catch (const std::exception& exception) {
+        compiler_context.diagnostics().report({},
+            std::string("Error: Parsing failed: ") + exception.what(), "", "", DiagnosticsLevel::Error);
+    }
 }
 
 /* */

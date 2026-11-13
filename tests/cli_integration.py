@@ -111,7 +111,7 @@ class CliIntegration(unittest.TestCase):
     def test_debug_two_sources_in_vscode_through_cli(self):
         directory = self.directory / ".vscode"
         directory.mkdir()
-        (directory / "file1.optic").write_text('import file2\nfunction main() { print(hello("levtcode")) return 0 }\n')
+        (directory / "file1.optic").write_text('import file2\nfunction main() { print(hello("levtcode")); return 0 }\n')
         (directory / "file2.optic").write_text('function hello(string name) { return "Hola " + name + "!"; }\n')
         # Use sibling compiler discovery, as in optic debug .vscode/file1.optic .vscode/file2.optic.
         result = self.run_tool(OPTIC, "debug", ".vscode/file1.optic", ".vscode/file2.optic")

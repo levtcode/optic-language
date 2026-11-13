@@ -176,6 +176,8 @@ void Lexer::tokenize(std::vector<token_t>& tokens) {
         const auto c = peek();
         if (std::isspace(c)) { get(); continue; }
         if (c == '/' && (peek(1) == '/' || peek(1) == '*')) { ignore_comment(); continue; }
+        const auto start = pos;
+        const auto count = tokens.size();
         if ((c == 'r' || c == 'f') && peek(1) == '"') {
             get();
             tokens.emplace_back(c == 'r' ? TokenType::RawString : TokenType::FString,
@@ -189,8 +191,13 @@ void Lexer::tokenize(std::vector<token_t>& tokens) {
         } else if (std::string_view("=+-*/%&|~^<>!").find(static_cast<char>(c)) != std::string_view::npos)
             tokens.push_back(read_operator());
         else { error(loc, "Unexpected character in source."); get(); }
+        for (auto i = count; i < tokens.size(); ++i) {
+            tokens[i].offset = start + (i > count ? 1 : 0);
+            tokens[i].end_offset = tokens.size() - count == 2 && i == count ? start + 1 : pos;
+        }
     }
     tokens.emplace_back(TokenType::EndOfFile, "EOF", location.line, location.column);
+    tokens.back().offset = tokens.back().end_offset = pos;
 }
 const char* to_string_token(TokenType type) {
     switch (type) {

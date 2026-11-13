@@ -1,0 +1,13 @@
+function add(a: int, b: int) -> int:
+    return a + b
+
+function main() {
+    int result = add(
+        1,
+        2 * 3
+    )
+    while result > 0:
+        if result == 2 { break }
+        result = result - 1
+    print(result); return 0
+}

@@ -9,8 +9,11 @@
 
 #include "compiler/driver/diagnostics_engine.hpp"
 #include "compiler/driver/module.hpp"
+#include "compiler/ast/ast.hpp"
 
 #include <filesystem>
+#include <map>
+#include <memory>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -121,11 +124,20 @@ public:
         return target_info;
     }
 
+    /// Compiler-owned results remain available after each module's parser is destroyed.
+    std::map<ModuleID, std::unique_ptr<ast::ModuleAST>>& syntax_trees() noexcept {
+        return module_asts;
+    }
+    const std::map<ModuleID, std::unique_ptr<ast::ModuleAST>>& syntax_trees() const noexcept {
+        return module_asts;
+    }
+
 private:
     CompilerConfig    compiler_config;
     DiagnosticsEngine diagnostics_engine;
     ModuleGraph       module_graph;
     TargetMachineInfo target_info;
+    std::map<ModuleID, std::unique_ptr<ast::ModuleAST>> module_asts;
 };
 
 /* */

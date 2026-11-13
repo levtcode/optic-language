@@ -1,0 +1,38 @@
+(* Initial runtime Optic grammar. NEWLINE/INDENT/DEDENT are produced by layout normalization.
+   Keywords for later features are reserved but rejected. Imports are removed before parsing. *)
+module         = { separator | statement } , EOF ;
+statement      = function | variable , end | if_stmt | while_stmt | block
+               | "return" , [ expression ] , end
+               | ( "break" | "continue" ) , end
+               | expression , end ;
+function       = "function" , identifier , "(" , [ parameter , { "," , parameter } ] , ")"
+               , [ "->" , type ] , block ;
+parameter      = identifier , ":" , type | type , identifier ;
+type           = "int" | "float" | "bool" | "string" | "char" | identifier ;
+variable       = type , identifier , [ "=" , { NEWLINE } , expression ] ;
+block          = { NEWLINE } , "{" , { separator | statement } , "}"
+               | ":" , NEWLINE , { NEWLINE } , INDENT , { separator | statement } , DEDENT ;
+if_stmt        = "if" , expression , block , { NEWLINE }
+               , [ "elif" , expression , block , { NEWLINE }
+                   , { "elif" , expression , block , { NEWLINE } }
+                   , [ "else" , block ]
+                 | "else" , block ] ;
+while_stmt     = "while" , expression , block ;
+expression     = assignment ;
+assignment     = logical_or , [ "=" , { NEWLINE } , assignment ] ;
+logical_or     = logical_and , { ( "or" | "||" ) , { NEWLINE } , logical_and } ;
+logical_and    = equality , { ( "and" | "&&" ) , { NEWLINE } , equality } ;
+equality       = comparison , { ( "==" | "!=" ) , { NEWLINE } , comparison } ;
+comparison     = sum , { ( "<" | "<=" | ">" | ">=" ) , { NEWLINE } , sum } ;
+sum            = product , { ( "+" | "-" ) , { NEWLINE } , product } ;
+product        = unary , { ( "*" | "/" | "%" ) , { NEWLINE } , unary } ;
+unary          = ( "+" | "-" | "not" | "!" ) , { NEWLINE } , unary | postfix ;
+postfix        = primary , { "(" , [ expression , { "," , expression } ] , ")"
+                          | "." , identifier } ;
+primary        = identifier | literal | "(" , expression , ")" ;
+literal        = integer | float | string | character | raw_string | "true" | "false" | "null" ;
+separator      = NEWLINE | ";" ;
+end            = ";" | NEWLINE | ? boundary before DEDENT, '}', or EOF without consuming it ? ;
+(* Functions are module-scope only. Assignment targets must be names or member accesses.
+   A newline immediately after return terminates it. No trailing argument/parameter commas yet.
+   Parenthesized/bracketed physical newlines do not emit NEWLINE tokens. *)

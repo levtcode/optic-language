@@ -14,6 +14,8 @@ public:
     Lexer(driver::Module& mod, driver::DiagnosticsEngine& diagnostics)
         : module(mod), diagnostic_engine(diagnostics) {}
     void tokenize(std::vector<token_t>& tokens);
+    /// Parser stream, including logical newlines and indentation-delimited blocks.
+    void tokenize_layout(std::vector<token_t>& tokens);
     static void print_tokens(const driver::Module& module);
 
 private:

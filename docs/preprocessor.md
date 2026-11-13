@@ -26,8 +26,8 @@ implicit standard-library lookup, alias syntax or wildcard import.
 
 An import ends at a semicolon or the end of its source line. Comments are
 handled by the lexer. Missing names, empty paths, embedded NUL bytes, trailing
-arguments and imports inside runtime braces produce errors at the import's
-source location. Strings and comments containing `import` remain ordinary
+arguments and imports inside runtime brace or indented blocks produce errors
+at the import's source location. Strings and comments containing `import` remain ordinary
 strings and comments.
 
 Each canonical filesystem path identifies one module. Repeated imports,
@@ -63,7 +63,8 @@ future library; compiler mode is selected through the CLI.
 one `Module` for each source file. `Module` owns:
 
 - The source path and original source bytes, retained for diagnostics.
-- The final token stream for that module, including exactly one `EndOfFile`.
+- The final token stream for that module, including logical `Newline`, `Indent`,
+  `Dedent` markers and exactly one `EndOfFile`.
 - Dependency IDs and preprocessing state (`Loaded`, `Processing`, `Ready`,
   `Failed`).
 
@@ -73,12 +74,15 @@ on demand and updates the existing modules. There is no separate
 unimplemented `SourceManager` API. Import statements are removed from the parser
 token stream; dependencies remain available through `Module::get_dependencies()`.
 
-The future parser should iterate `ModuleGraph::compilation_order()`, parse each
-ready module separately, and associate its AST with that module's ID. A token's
+The parser iterates `ModuleGraph::compilation_order()`, parses each
+ready module separately, and associates its AST with that module's ID in
+`CompilerContext::syntax_trees()`. The AST definitions live in `compiler/ast/`. A token's
 line/column is relative to its owning module. A parser must not concatenate
 module token streams: each stream has its own EOF, source identity and scope.
 Name visibility and symbol linking across imports belong to semantic analysis,
-not preprocessing. The parser and semantic analysis are still pending.
+not preprocessing. The initial parser is implemented; semantic analysis is still
+pending. See
+[parser architecture](parser.md) for the supported grammar and ownership.
 
 ## Lexical guarantees
 
@@ -99,8 +103,9 @@ retain `Int`, `Float`, `String` and `Char`. The parser can distinguish types fro
 values without inspecting token text. Token kinds and debug names share the
 `tokens_types.def` definition list.
 Raw `r"..."` strings preserve backslashes and formatted `f"..."` strings retain
-their prefix token for the future parser. Interpolation evaluation is not part
-of the lexer. Multiline quoted strings are not supported.
+their prefix token. Interpolation evaluation is not part of the lexer; formatted
+strings are rejected by the initial runtime parser. Multiline quoted strings
+are not supported.
 
 Unknown characters/escapes and unterminated strings/comments are diagnosed,
 including truncation at EOF. The lexer never silently discards an unknown byte.

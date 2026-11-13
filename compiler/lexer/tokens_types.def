@@ -108,6 +108,9 @@ X(StringLiteral)
 X(CharLiteral)
 
 // ===== Special =====
+X(Newline)
+X(Indent)
+X(Dedent)
 X(LiteralTrue)
 X(LiteralFalse)
 X(FString)

@@ -74,7 +74,7 @@ bool Preprocessor::process(ModuleID id, std::size_t depth) {
     module.set_state(ModuleState::Processing);
     const auto errors_before = context.diagnostics().error_count();
     std::vector<lexer::token_t> input;
-    lexer::Lexer(module, context.diagnostics()).tokenize(input);
+    lexer::Lexer(module, context.diagnostics()).tokenize_layout(input);
     lexical_tokens += input.size() - 1;
     trace("Lexed module [" + std::to_string(id) + "]: " + std::to_string(input.size() - 1) + " tokens (excluding EOF)");
     auto& output = module.get_tokens();
@@ -85,17 +85,18 @@ bool Preprocessor::process(ModuleID id, std::size_t depth) {
         trace("Lexing failed for module [" + std::to_string(id) + "]: " + module.get_path());
         return false;
     }
-    unsigned braces = 0;
+    unsigned braces = 0, indentation = 0;
     for (std::size_t cursor = 0; cursor + 1 < input.size();) {
         const auto token = input[cursor++];
         if (token.type == TokenType::Import) {
             ++import_requests;
             const auto start = cursor;
             while (cursor + 1 < input.size() && input[cursor].line == token.line &&
-                   input[cursor].type != TokenType::Semicolon) ++cursor;
+                   input[cursor].type != TokenType::Semicolon &&
+                   input[cursor].type != TokenType::Newline) ++cursor;
             const auto end = cursor;
             if (cursor + 1 < input.size() && input[cursor].type == TokenType::Semicolon) ++cursor;
-            if (braces != 0) { error(module, token, "Imports are only allowed at module scope."); continue; }
+            if (braces != 0 || indentation != 0) { error(module, token, "Imports are only allowed at module scope."); continue; }
             std::filesystem::path path;
             if (end == start + 1 && input[start].type == TokenType::StringLiteral) {
                 const auto& name = input[start].value;
@@ -138,6 +139,8 @@ bool Preprocessor::process(ModuleID id, std::size_t depth) {
         }
         if (token.type == TokenType::LeftBrace) ++braces;
         if (token.type == TokenType::RightBrace && braces != 0) --braces;
+        if (token.type == TokenType::Indent) ++indentation;
+        if (token.type == TokenType::Dedent && indentation != 0) --indentation;
         output.push_back(token);
     }
     output.push_back(input.back());
