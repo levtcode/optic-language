@@ -85,51 +85,76 @@ bool Preprocessor::process(ModuleID id, std::size_t depth) {
         trace("Lexing failed for module [" + std::to_string(id) + "]: " + module.get_path());
         return false;
     }
-    unsigned braces = 0, indentation = 0;
+    module.clear_imports();
+    unsigned braces = 0, parens = 0, brackets = 0;
     for (std::size_t cursor = 0; cursor + 1 < input.size();) {
         const auto token = input[cursor++];
         if (token.type == TokenType::Import) {
-            ++import_requests;
             const auto start = cursor;
             while (cursor + 1 < input.size() && input[cursor].line == token.line &&
                    input[cursor].type != TokenType::Semicolon &&
                    input[cursor].type != TokenType::Newline) ++cursor;
             const auto end = cursor;
             if (cursor + 1 < input.size() && input[cursor].type == TokenType::Semicolon) ++cursor;
-            if (braces != 0 || indentation != 0) { error(module, token, "Imports are only allowed at module scope."); continue; }
-            std::filesystem::path path;
-            if (end == start + 1 && input[start].type == TokenType::StringLiteral) {
-                const auto& name = input[start].value;
-                if (name.empty() || name.find('\0') != std::string::npos) {
-                    error(module, token, "Invalid empty or NUL-containing import path."); continue;
-                }
-                path = name;
-            } else {
-                // Bare names use dotted module components: import math.vector
-                bool expect_name = true, valid = start != end;
-                for (auto i = start; i < end; ++i) {
-                    if (expect_name && input[i].type == TokenType::Identifier) path /= input[i].value;
-                    else if (expect_name || input[i].type != TokenType::Point) { valid = false; break; }
-                    expect_name = !expect_name;
-                }
-                if (!valid || expect_name) { error(module, token, "Expected a quoted path or dotted module name after 'import'."); continue; }
+            if (braces != 0 || parens != 0 || brackets != 0) {
+                ++import_requests;
+                error(module, token, "Imports are only allowed at module scope."); continue;
             }
-            if (!path.has_extension()) path += OPTIC_EXTENSION;
-            if (path.is_relative()) path = std::filesystem::path(module.get_path()).parent_path() / path;
-            trace("Resolving import at " + module.get_path() + ":" + std::to_string(token.line) + ":" +
-                  std::to_string(token.column) + " -> " + ModuleGraph::path_key(path));
-            const auto dependency = load(path, {SourceKind::BufferNoAST, module.get_path(), "", token.line, token.column});
-            if (dependency == invalid_module_id) continue;
-            if (!graph.add_dependency(id, dependency)) {
-                error(module, token, "Import cycle: '" + module.get_path() + "' -> '" + graph.get_module(dependency)->get_path() + "'.");
+            struct Request { std::string name, alias; std::filesystem::path path; };
+            std::vector<Request> requests;
+            bool valid = start != end;
+            auto i = start;
+            while (valid && i < end) {
+                Request request;
+                if (input[i].type == TokenType::StringLiteral) {
+                    request.name = input[i++].value;
+                    if (request.name.empty() || request.name.find('\0') != std::string::npos) { valid = false; break; }
+                    request.path = request.name;
+                } else {
+                    if (input[i].type != TokenType::Identifier) { valid = false; break; }
+                    request.name = input[i].value; request.path /= input[i++].value;
+                    while (i < end && input[i].type == TokenType::Point) {
+                        ++i;
+                        if (i == end || input[i].type != TokenType::Identifier) { valid = false; break; }
+                        request.name += "." + input[i].value; request.path /= input[i++].value;
+                    }
+                }
+                if (!valid) break;
+                if (i < end && input[i].type == TokenType::As) {
+                    ++i;
+                    if (i == end || input[i].type != TokenType::Identifier) { valid = false; break; }
+                    request.alias = input[i++].value;
+                }
+                requests.push_back(std::move(request));
+                if (i == end) break;
+                if (input[i++].type != TokenType::Comma || i == end) { valid = false; break; }
+            }
+            import_requests += requests.empty() ? 1 : requests.size();
+            if (!valid || requests.empty()) {
+                error(module, token, "Expected quoted paths or dotted module names, optional 'as' names and comma-separated imports.");
                 continue;
             }
-            if (!process(dependency, depth + 1)) {
-                error(module, token, "Imported module failed preprocessing: '" + graph.get_module(dependency)->get_path() + "'.");
-            } else {
-                ++imports_completed;
-                trace("Imported " + graph.get_module(dependency)->get_path() + " from " + module.get_path() +
-                      " successfully. (edge [" + std::to_string(id) + "] -> [" + std::to_string(dependency) + "])");
+            for (auto& request : requests) {
+                auto path = request.path;
+                if (!path.has_extension()) path += OPTIC_EXTENSION;
+                if (path.is_relative()) path = std::filesystem::path(module.get_path()).parent_path() / path;
+                trace("Resolving import at " + module.get_path() + ":" + std::to_string(token.line) + ":" +
+                      std::to_string(token.column) + " -> " + ModuleGraph::path_key(path));
+                const auto dependency = load(path, {SourceKind::BufferNoAST, module.get_path(), "", token.line, token.column});
+                if (dependency == invalid_module_id) continue;
+                if (!graph.add_dependency(id, dependency)) {
+                    error(module, token, "Import cycle: '" + module.get_path() + "' -> '" + graph.get_module(dependency)->get_path() + "'.");
+                    continue;
+                }
+                if (!process(dependency, depth + 1)) {
+                    error(module, token, "Imported module failed preprocessing: '" + graph.get_module(dependency)->get_path() + "'.");
+                } else {
+                    ++imports_completed;
+                    module.record_import({dependency, request.name, request.alias, token.line, token.column});
+                    trace("Imported " + graph.get_module(dependency)->get_path() + " from " + module.get_path() +
+                          " successfully. (edge [" + std::to_string(id) + "] -> [" + std::to_string(dependency) + "])" +
+                          (request.alias.empty() ? "" : " as " + request.alias));
+                }
             }
             continue;
         }
@@ -139,8 +164,10 @@ bool Preprocessor::process(ModuleID id, std::size_t depth) {
         }
         if (token.type == TokenType::LeftBrace) ++braces;
         if (token.type == TokenType::RightBrace && braces != 0) --braces;
-        if (token.type == TokenType::Indent) ++indentation;
-        if (token.type == TokenType::Dedent && indentation != 0) --indentation;
+        if (token.type == TokenType::LeftParen) ++parens;
+        if (token.type == TokenType::RightParen && parens != 0) --parens;
+        if (token.type == TokenType::LeftBracket) ++brackets;
+        if (token.type == TokenType::RightBracket && brackets != 0) --brackets;
         output.push_back(token);
     }
     output.push_back(input.back());

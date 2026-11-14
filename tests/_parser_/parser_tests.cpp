@@ -1,6 +1,11 @@
 #include "compiler/parser/parser.hpp"
 #include "compiler/ast/dump.hpp"
 #include "compiler/lexer/lexer.hpp"
+#include "compiler/preprocessor/preprocessor.hpp"
+#include "compiler/driver/compiler_instance.hpp"
+#include <filesystem>
+#include <fstream>
+#include <chrono>
 #include <cstdlib>
 #include <iostream>
 #include <random>
@@ -57,25 +62,55 @@ void expressions() {
 }
 void blocks() {
     Session braces("function f(n: int) -> int {\n if n > 0 { return n } else { return 0 }\n}\n");
-    Session layout("function f(n: int) -> int:\n    if n > 0:\n        return n\n    else:\n        return 0\n");
-    check(braces.tree && layout.tree, "equivalent block styles failed");
-    auto verify = [](const ast::ModuleAST& tree) {
-        auto* function = dynamic_cast<ast::FunctionDecl*>(tree.statements[0].get());
-        check(function && function->parameters.size() == 1 && function->return_type->name == "int", "function signature");
-        auto* branch = dynamic_cast<ast::IfStmt*>(function->body->statements[0].get());
-        check(branch && branch->else_branch && branch->then_branch->statements.size() == 1, "if block representation");
-    };
-    verify(*braces.tree); verify(*layout.tree);
-    valid("function f():\n    while true {\n        if false:\n            break\n        else:\n            continue\n    }\n    return\n");
-    valid("function f() {\n    if true:\n        print(1)\n    elif false { print(2) } else:\n        print(3)\n}\n");
-    valid("function f(string name, n: int) { print(name, n); return 0 }");
-    valid("function f():\r\n  // ignored\r\n  if true:\r\n    /* comment */\r\n    return 1\r\n");
+    check(braces.tree != nullptr, "brace block parse failed");
+    auto* f = dynamic_cast<ast::FunctionDecl*>(braces.tree->statements[0].get());
+    check(f && f->parameters[0].type->name == "int", "annotated function signature");
+    check(dynamic_cast<ast::IfStmt*>(f->body->statements[0].get())->else_branch != nullptr, "else branch");
+    valid("function f() {\n\twhile true { if false { break } else { continue } }\n return\n}\n");
+    valid("function f(name: string, n) { print(name, n); return 0 }");
+    valid("function f()\r\n{\r\n // comment\r\n return 1\r\n}\r\n");
     valid("function f() {}\n{}");
-    valid("function f():\n    if (\n        true\n):\n        return 1\n    return 0\n");
-    // Every node remains valid after the temporary Parser is destroyed.
+    invalid("function f():\n    return 1\n");
     std::ostringstream output;
-    ast::dump(*layout.tree, output);
+    ast::dump(*braces.tree, output);
     check(output.str().find("Function f -> int") != std::string::npos, "persistent AST dump");
+}
+void types_and_containers() {
+    Session s("alias [int | float | double | string] as numeric\nfunction add(a: numeric, b) -> numeric { return a + b }\narray[array[int, 2], 3] matrix = {{1,2},{3,4},{5,6}}\n");
+    check(s.tree != nullptr, "type expressions and restrictions");
+    auto* alias = dynamic_cast<ast::AliasDecl*>(s.tree->statements[0].get());
+    check(alias && alias->type_target->alternatives.size() == 4, "alias must retain one union target");
+    auto* f = dynamic_cast<ast::FunctionDecl*>(s.tree->statements[1].get());
+    check(f && !f->parameters[1].type && f->parameters[0].type->name == "numeric", "implicit static generic parameter");
+    auto* matrix = dynamic_cast<ast::VariableDecl*>(s.tree->statements[2].get());
+    check(matrix && matrix->type.arguments.size() == 2 && matrix->type.arguments[0].arguments.size() == 2, "nested type application");
+    valid("array[int, x + 1] sized\n");
+    valid("array[int, x] arr\narr[-1] = i\narr.at(2) = 4\nvector[int] *p\ndelete p\n");
+    valid("dict[string, dict[string, int]] people = {\n \"angel\": { \"edad\": 15 },\n}\n");
+    valid("tuple[int, string, bool] tup = (1, \"hola\", true)\nvector v = [1,2,3,]\n");
+    valid("const size_t bytes = 1024\nint x = 5, y = 2\nalias [unsigned long] as size_t\n");
+    valid("function main() { for (int i = 0; i < x; i++) { arr[i] = i } }\n");
+    valid("for (; ptr < &array1[-1]; ptr++) {}\nfor (;;) { break }\n");
+    valid("struct Tree { int id\n Tree *next }\nTree *root = new Tree()\n");
+    valid("class Book { public string name\nprivate int stock\nBook(name) { self.name = name }\npublic function add(n: int) -> void { self.stock += n }\n}\n");
+    valid("try { read(system::stdin) } catch (system::stream_exception &exception) { throw exception }\n");
+}
+void casts_and_strings() {
+    Session s("result = (int) (a + b)\n");
+    check(s.tree != nullptr, "explicit cast");
+    auto* assignment = dynamic_cast<ast::AssignExpr*>(dynamic_cast<ast::ExprStmt*>(s.tree->statements[0].get())->expression.get());
+    check(dynamic_cast<ast::CastExpr*>(assignment->value.get())->type.name == "int", "cast type structure");
+    valid("string a = \"hello\"\n    \" world\"\nstring b = r\"raw\nmultiline\"\n");
+    valid("string b = \"hello \\\n world\"\n");
+    Session formatted("text = f\"value: {23}, {x + 1}\"\n");
+    check(formatted.tree != nullptr, "formatted expression");
+    auto* value = dynamic_cast<ast::AssignExpr*>(dynamic_cast<ast::ExprStmt*>(formatted.tree->statements[0].get())->expression.get());
+    auto* string = dynamic_cast<ast::FormattedExpr*>(value->value.get());
+    check(string && string->parts.size() == 4, "formatted string parts");
+    check(string->parts[1]->span.begin == 17 && string->parts[1]->span.line == 1, "embedded expression original span");
+    valid("f\"{{value}} {call(\"nested\")}\"\n");
+    invalid("f\"value: {}\"");
+    invalid("f\"value: {1 +}\"");
 }
 void separators() {
     valid("int a = 1; int b = 2\na = a +\n  b\nprint(\n a,\n b\n)\n");
@@ -87,12 +122,35 @@ void separators() {
     invalid("print(1) return 0");
     invalid("int x = 1 int y = 2");
 }
+void ambiguity_and_imports() {
+    valid("a * b + c\na & b | c\nscope::a * b + c\na * b(2)\n");
+    Session ambiguous("a * b\nvalue = (Unknown) + x * y\n");
+    check(ambiguous.tree != nullptr, "unresolved syntax must survive parsing");
+    check(dynamic_cast<ast::AmbiguousStmt*>(ambiguous.tree->statements[0].get()), "pointer declaration vs product must remain unresolved");
+    auto* whole = dynamic_cast<ast::UnresolvedExpr*>(dynamic_cast<ast::ExprStmt*>(ambiguous.tree->statements[1].get())->expression.get());
+    check(whole && !whole->tokens.empty(), "cast/grouping ambiguity must retain the whole expression");
+    const auto root = std::filesystem::temp_directory_path() / ("optic-parser-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    std::filesystem::create_directory(root);
+    struct Cleanup { std::filesystem::path path; ~Cleanup() { std::filesystem::remove_all(path); } } cleanup{root};
+    std::ofstream(root / "system.optic") << "function input() {}\n";
+    std::ofstream(root / "utils.optic") << "function check() {}\n";
+    std::ofstream(root / "main.optic") << "import system as os, utils\nfunction main() { os::input() }\n";
+    driver::CompilerContext context;
+    preprocessor::Preprocessor preprocessor(context);
+    check(preprocessor.run({(root / "main.optic").string()}), "aliased multiple import failed");
+    const auto id = context.modules().find_module(root / "main.optic");
+    const auto* module = context.modules().get_module(id);
+    check(module && module->get_imports().size() == 2, "import bindings lost");
+    check(module->get_imports()[0].alias == "os" && module->get_imports()[0].name == "system", "alias binding identity");
+    check(module->get_imports()[0].target == context.modules().find_module(root / "system.optic"), "alias points at wrong module");
+}
 void errors_and_limits() {
     for (const auto& source : {"function f() {", "function () {}", "function f(x:) {}",
-        "if true:\nprint(1)", "if true: print(1)", "if true:\n    x\n  y\n",
-        "if true:\n\tx\n", "if true:\n    ;\n", "function f():", "else {}", "x =", "1 = 2",
-        "print(1,)", "(1 + 2", "f(1", "if true { return 1", "int x = f\"hello\"",
-        "for x {}", "array[int] x", "a[0]", "x++", "2 ** 3", "function f() { function g() {} }"}) invalid(source);
+        "if true:\nprint(1)", "if true: print(1)", "function f():", "else {}", "x =", "1 = 2",
+        "(1 + 2", "f(1", "if true { return 1", "for x {}", "array<int,4> x", "int arr[4]",
+        "for (i=0, i<n, i++) {}", "alias \"int | string\" as Params", "alias int | string as Params",
+        "alias [1 + 2] as Three", "alias [int | ] as Params", "dict[string, int] d = {\"a\" 1}",
+        "2 ** 3", "function f() { function g() {} }"}) invalid(source);
     Session multiple("int = 1\nprint(\n");
     check(!multiple.tree && multiple.diagnostics.error_count() >= 2, "error recovery must report independent errors");
     invalid(std::string(1000, '(') + "1" + std::string(1000, ')'));
@@ -103,7 +161,7 @@ void errors_and_limits() {
     driver::Module module("empty-stream.optic");
     driver::DiagnosticsEngine diagnostics;
     check(!parser::Parser(1, module, diagnostics).parse() && diagnostics.has_errors(), "empty stream precondition");
-    const std::string program = "function f(n: int):\n    if n > 0:\n        return f(n - 1)\n    return 0\n";
+    const std::string program = "function f(n: int) {\n if n > 0 { return f(n - 1) }\n return 0\n}\n";
     for (std::size_t end = 0; end <= program.size(); ++end) Session truncated(program.substr(0, end));
     std::mt19937 random(0x0f71c);
     const std::string alphabet = "abc123(){}[]:;,+-*/=\n \"";
@@ -114,4 +172,4 @@ void errors_and_limits() {
     }
 }
 }
-int main() { expressions(); blocks(); separators(); errors_and_limits(); }
+int main() { expressions(); blocks(); types_and_containers(); casts_and_strings(); separators(); ambiguity_and_imports(); errors_and_limits(); }

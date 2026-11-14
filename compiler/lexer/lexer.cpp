@@ -78,12 +78,31 @@ token_t Lexer::read_number() {
     }
     return {floating ? TokenType::FloatLiteral : TokenType::IntegerLiteral, value, loc.line, loc.column};
 }
-token_t Lexer::read_string(bool raw) {
+token_t Lexer::read_string(bool raw, bool formatted) {
     const auto loc = location;
     const auto quote = get();
     std::string value;
-    while (peek() != EOF && peek() != quote) {
-        if (peek() == '\n' || peek() == '\r') {
+    unsigned interpolation = 0;
+    int inner_quote = 0;
+    while (peek() != EOF && (peek() != quote || interpolation != 0)) {
+        if (formatted && interpolation != 0) {
+            const int c = get();
+            value += static_cast<char>(c);
+            if (inner_quote != 0) {
+                if (c == '\\' && peek() != EOF) value += static_cast<char>(get());
+                else if (c == inner_quote) inner_quote = 0;
+            } else if (c == '"' || c == '\'') inner_quote = c;
+            else if (c == '{') ++interpolation;
+            else if (c == '}') --interpolation;
+            continue;
+        }
+        if (formatted && peek() == '{') {
+            value += static_cast<char>(get());
+            if (peek() == '{') value += static_cast<char>(get());
+            else interpolation = 1;
+            continue;
+        }
+        if (!raw && (peek() == '\n' || peek() == '\r')) {
             error(loc, "String not closed before end of line.");
             return {quote == '\'' ? TokenType::CharLiteral : TokenType::StringLiteral, value, loc.line, loc.column};
         }
@@ -91,8 +110,8 @@ token_t Lexer::read_string(bool raw) {
         if (c != '\\' || raw) { value += static_cast<char>(c); continue; }
         const auto escape_loc = location;
         if (peek() == '\n' || peek() == '\r') {
-            error(loc, "String not closed before end of line.");
-            return {quote == '\'' ? TokenType::CharLiteral : TokenType::StringLiteral, value, loc.line, loc.column};
+            if (get() == '\r' && peek() == '\n') get();
+            continue; // C/C++ backslash-newline splicing, indentation remains content.
         }
         c = get();
         if (c == EOF) break;
@@ -182,10 +201,11 @@ void Lexer::tokenize(std::vector<token_t>& tokens) {
             get();
             tokens.emplace_back(c == 'r' ? TokenType::RawString : TokenType::FString,
                                 std::string(1, static_cast<char>(c)), loc.line, loc.column);
-            tokens.push_back(read_string(c == 'r'));
+            tokens.push_back(read_string(c == 'r', c == 'f'));
         } else if (alpha(c)) tokens.push_back(read_identifier());
         else if (digit(c)) tokens.push_back(read_number());
         else if (c == '"' || c == '\'') tokens.push_back(read_string());
+        else if (c == ':' && peek(1) == ':') tokens.push_back(read_operator());
         else if (const auto it = symbol_table.find(c); it != symbol_table.end()) {
             tokens.emplace_back(it->second, std::string(1, static_cast<char>(get())), loc.line, loc.column);
         } else if (std::string_view("=+-*/%&|~^<>!").find(static_cast<char>(c)) != std::string_view::npos)

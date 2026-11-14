@@ -19,6 +19,8 @@ public:
     bool at(lexer::TokenType type) const { return peek().type == type; }
     bool accept(lexer::TokenType type) { if (!at(type)) return false; advance(); return true; }
     std::size_t position() const { return index; }
+    std::span<const lexer::token_t> slice(std::size_t begin, std::size_t end) const { return tokens.subspan(begin, end - begin); }
+    void restore(std::size_t position) { index = position; }
 private:
     std::span<const lexer::token_t> tokens;
     std::size_t index = 0;

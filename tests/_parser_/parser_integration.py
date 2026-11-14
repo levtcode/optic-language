@@ -33,7 +33,7 @@ class ParserIntegration(unittest.TestCase):
                     self.assertEqual(result.returncode, status, result.stderr)
 
     def test_each_module_has_its_own_ast(self):
-        dep = self.source("dep.optic", "function helper() -> int:\n    return 42\n")
+        dep = self.source("dep.optic", "function helper() -> int {\n    return 42\n}\n")
         main = self.source("main.optic", 'import dep\nimport dep\nfunction main() { return helper() }\n')
         result = self.compile(main, dep)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -47,19 +47,43 @@ class ParserIntegration(unittest.TestCase):
             self.assertNotIn(b"ModuleAST", result.stdout)
 
     def test_nested_imports_are_never_loaded(self):
-        for source in ('function main():\n    import missing\n',
-                       'function main() {\n    if true:\n        import missing\n}\n'):
+        for source in ('function main() {\n    import missing\n}\n',
+                       'function main() {\n    if true {\n        import missing\n    }\n}\n'):
             main = self.source("main.optic", source)
             result = self.compile(main)
             self.assertEqual(result.returncode, 1)
             self.assertIn(b"Imports are only allowed at module scope", result.stderr)
             self.assertNotIn(b"Cannot open module", result.stderr)
 
-    def test_import_after_dedent_and_semicolon(self):
+    def test_import_after_block_and_semicolon(self):
         self.source("dep.optic", "function dep() {}\n")
-        main = self.source("main.optic", 'function main():\n    return 0\nimport dep; int x = 1\n')
+        main = self.source("main.optic", 'function main() {\n    return 0\n}\nimport dep; int x = 1\n')
         result = self.compile(main)
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_multiple_imports_and_namespace_alias(self):
+        self.source("system.optic", "function input() {}\n")
+        self.source("utils.optic", "function is_numeric(s) -> bool { return true }\n")
+        main = self.source("main.optic", 'import system as os, utils\nfunction main() {\n s = os::input(\"number: \")\n if (not utils::is_numeric(s)) { throw not_numeric_exception }\n}\n')
+        result = self.compile(main)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.count(b"ModuleAST ["), 3)
+        self.assertIn(b" as os", result.stdout)
+        self.assertIn(b"Qualified input", result.stdout)
+
+    def test_malformed_import_list_and_alias(self):
+        for text in ("import io as\n", "import io,\n", "import io as os extra\n", "call(\nimport missing\n)\n"):
+            source = self.source("bad-import.optic", text)
+            result = self.compile(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertNotIn(b"Cannot open module", result.stderr)
+
+    def test_error_handling_syntax(self):
+        self.source("system.optic", "function read() {}\n")
+        main = self.source("main.optic", 'import system\nfunction main() {\n const size_t bytes = 1024\n buffer = \"\"\n try {\n  if (read(system::stdin, bytes, buffer.data()) != 0) { return 1 }\n } catch (system::stream_exception &exception) { throw exception }\n}\n')
+        result = self.compile(main)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(b"Catch system::stream_exception& exception", result.stdout)
 
     def test_dependency_syntax_error_is_located_in_its_file(self):
         dep = self.source("dep.optic", "function helper() {\n    int x =\n}\n")
@@ -71,7 +95,7 @@ class ParserIntegration(unittest.TestCase):
         self.assertNotIn(b"Function helper", result.stdout)
 
     def test_unsupported_and_multiple_errors(self):
-        source = self.source("bad.optic", "int = 1\nclass Foo {}\nint = 2\n")
+        source = self.source("bad.optic", "int = 1\nclass {}\nint = 2\n")
         result = self.compile(source)
         self.assertEqual(result.returncode, 1)
         self.assertGreaterEqual(result.stderr.count(b"Error:"), 2)

@@ -1,0 +1,12 @@
+string a = "Esto es una cadena multilinea"
+           " con concatenacion implicita"
+string b = "Esto es otra cadena. \
+            Pero esta vez con escape \
+            de barra invertida"
+string c = r"Esto es una raw string.
+
+for i in range(5):
+    print(i)
+
+"
+string d = f"Valor: {23} y {calc(1, 2, 3)}"

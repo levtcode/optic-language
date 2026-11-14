@@ -1,138 +1,191 @@
-# Parser and compiler AST
+# Optic parser and compiler AST
 
-Optic's first runtime parser uses recursive descent for declarations/statements
-and precedence climbing for expressions. Its grammar is in [grammar.ebnf](grammar.ebnf).
-`compiler/ast/` is a compiler component shared by the parser and future semantic
-analysis; its nodes depend on no parser implementation objects. Public namespaces
-are `optic::compiler::ast` and `optic::compiler::parser`.
+The parser recognizes Optic syntax and preserves it in `compiler/ast/` for later
+semantic analysis. It does not execute code, specialize functions, enforce static
+types or implement memory management. The grammar summary is in
+[grammar.ebnf](grammar.ebnf); executable examples are in
+`tests/_parser_/fixtures/valid/` and negative examples in `fixtures/invalid/`.
 
-## Blocks and statement boundaries
+## Blocks, separators and multiline expressions
 
-A function, `if`/`elif`/`else`, or `while` accepts either a brace block or a colon
-followed by a newline and an indented body. Both forms produce an `ast::Block`:
+Blocks **always use braces**. Indentation and tabs are visual only. The old
+colon/indentation grammar and Indent/Dedent tokens have been removed.
 
 ```optic
-function positive(n: int) -> bool:
-    if n > 0:
-        return true
-    else { return false }
-
 function main() {
-    int value = 2
-    while value > 0:
-        print(value)
-        value = value - 1
-    return 0
+    array[int, 4] arr = {1, 2, 3, 4}
+    for (int i = 0; i < arr.length; i++) {
+        arr[i] = i
+    }
+    print(arr[-1]); return 0
 }
 ```
 
-Colon bodies use spaces and must be indented beyond the header. The first
-statement establishes the body indentation; later statements at that level must
-align. A dedent must match the header or an enclosing colon body. There is no
-fixed indentation width. Leading tabs are diagnosed. Blank and comment-only
-lines do not establish or end a block; CRLF is supported. Brace blocks may be
-empty, and their indentation is otherwise cosmetic. Colon blocks must contain
-a statement and cannot have an inline body. Mixed nesting is supported: a brace
-block suspends the surrounding indentation comparison; colon blocks inside it
-introduce their own indentation levels. A closing brace also closes colon blocks
-contained in that brace scope. EOF closes any remaining indentation levels,
-but never supplies a missing brace.
+A physical newline ends a complete simple statement. A semicolon is optional
+before a newline, `}` or EOF and separates multiple simple statements on the
+same line. The three `for` clauses use **semicolons**, not commas. Initialization,
+condition and update may be omitted (`for (;;) { ... }`). A declaration may
+contain multiple names (`int x = 5, y = 2`); updates may be comma-separated.
 
-Semicolons are optional at logical line ends and before `}`, a dedent or EOF.
-Multiple simple statements on one line require semicolons. Physical newlines
-inside parentheses/brackets are ignored. An expression can also continue after
-a supported operator that requires an operand:
+Expressions continue across newlines inside calls, grouped expressions, indices,
+type arguments and collection literals, or after an operator needing an operand:
 
 ```optic
-int value = 1 +
-    2 * 3
+result = offset +
+    bytes * size
 print(
-    value,
+    result,
     "done"
 )
 ```
 
-A new line beginning with `+`, `-`, `(` or a member suffix does not extend the
-preceding complete expression. A newline immediately after `return` means return
-without a value. These are Optic's rules; they do not implement JavaScript's
-complete automatic semicolon insertion algorithm. `else`/`elif` may follow a
-block across newlines, but not across a semicolon.
+No final semicolon is required for multiline expressions. A leading operator on
+a new line does not retroactively continue the preceding complete statement.
+A newline immediately after `return` produces a return without a value. `else if`
+is the conditional chaining spelling. A newline, but not a semicolon, may separate
+an `if` block from its `else`.
 
-## Initial language subset
+## Types, implicit generics and aliases
 
-- Module-scope functions: `function f(n: int) -> int` and legacy `function f(int n)`.
-- Optional syntactic return type; semantic return inference/checking is pending.
-- Variables: `int value = 1`, with an optional initializer. A named type is also
-  retained as a syntactic reference for future name resolution.
-- Blocks, `if`/`elif`/`else`, `while`, `return`, `break`, `continue`.
-- Integer, floating, boolean, string, character, raw-string and null literals.
-- Names, grouped expressions, calls and member access; no trailing commas yet.
-- Unary `+`, `-`, `not`, `!`; binary `* / %`, `+ -`, comparisons, equality,
-  `and`/`&&`, `or`/`||`; assignment `=` to a name or member.
+Type arguments follow the **type**, use brackets and precede the variable name:
 
-Precedence increases from assignment to logical-or, logical-and, equality,
-comparison, addition, multiplication, unary, and postfix operations. Assignment
-associates right; other binary operators associate left. Top-level statements
-remain accepted, matching the existing frontend inspection fixtures. Nested
-functions, collection/indexing syntax, compound assignment, increment/decrement,
-power/bitwise operators, formatted interpolation, `for`, classes, exceptions,
-lambdas and assembly are not implemented. Unsupported syntax is rejected, not
-silently skipped. Imports remain a preprocessing concern and macros remain disabled.
-The lexer recognizing a keyword does not mean the runtime grammar supports it.
+```optic
+array[int, 4] numbers
+vector[string] names
+dict[string, dict[string, int]] people = {"angel": {"edad": 15}}
+tuple[int, string, bool] item = (1, "hello", true)
+```
 
-Parsing checks structure and assignable expression shapes. Name visibility,
-resolved types, argument counts, return compatibility and whether a break/return
-is semantically valid in context are **not yet checked**. Build/Run still fail
-with the explicit backend/runtime-pending result after successful frontend work.
+`array<int, 4> numbers`, `int numbers[4]` and `array numbers[int, 4]` are rejected.
+Both type and non-type arguments are retained, including nested applications and
+extent expressions. A bare argument name is unresolved syntax: later analysis
+must determine whether it names a type or a value.
 
-## Components and ownership
+Parameters use `name` or `name: Type`. No annotation means an **implicit static
+generic parameter**, not a dynamically changing variable. Restrictions and return
+annotations accept unions:
 
-| File | Responsibility |
+```optic
+alias [int | float | double | string] as func1_params
+alias [unsigned long] as size_t
+alias size_t as bytes_t
+function add(a: func1_params, b: func1_params) -> func1_params { return a + b }
+function inferred_add(a, b) { return a + b }
+```
+
+Aliases are **type-only**, with `original as new` order. Compound type expressions
+are enclosed in brackets. Named types can be referenced without that enclosing
+pair. String-quoted aliases, value-expression aliases and textual macro expansion
+are not supported. Import `as` bindings are separate module bindings.
+
+`const` is explicit (`const size_t bytes = 1024`). Capitalization does not imply
+constness. Pointer/reference declarators (`Tree *next`, `system::error &exception`)
+and qualified names are retained as structured types.
+
+## Represented syntax
+
+- Functions, optional return annotations, typed/untyped parameters and calls.
+- Typed declarations, declaration groups and assignments used for inferred names.
+- Classes/structs, per-member public/private/protected visibility, fields,
+  constructors and methods. Visibility defaults are left to semantic analysis.
+- Brace blocks, `if`/`else if`/`else`, `while`, three-clause `for`, return,
+  break, continue, `try`/typed `catch` and `throw`.
+- Scalar literals, raw strings, adjacent string concatenation and f-string
+  interpolation with expression nodes. Normal strings support backslash-newline
+  splicing; raw quoted strings can contain literal newlines. Indentation following
+  a spliced newline remains string content. Interpolation supports `{expression}`
+  and doubled literal braces; Python formatting/conversion directives are not
+  implemented in this version.
+- Array `{...}`, vector `[...]`, tuple `(...)` and dictionary `{key: value}`
+  literals, including nesting and trailing commas. `{}` in an initializer is an
+  unresolved empty brace literal; the receiving type determines its meaning.
+  `(value)` groups an expression; `()` and `(value,)` are tuples.
+- Indexing (including negative-index syntax), member `.`, qualified `::`, calls,
+  prefix/postfix increment/decrement, unary arithmetic/logical/bitwise operators,
+  address/dereference, arithmetic/comparison/logical/bitwise/shift operators,
+  assignment and compound assignment, C-style casts, `new Type(...)` and `delete`.
+
+Assignment associates right. Other binary operators associate left, with C-like
+precedence (logical-or, logical-and, bitwise-or/xor/and, equality, comparison,
+shifts, addition, multiplication, unary and postfix). `and`/`or`/`not` share the
+corresponding symbolic operators' precedence. Assignment syntax allows names,
+members, indices, dereferences and calls: a call such as `arr.at(2)` may return
+an assignable reference, which semantic analysis must verify.
+
+Nested functions, enum/switch/lambda/assembly constructs, ternary expressions,
+explicit function template declarations and power `**` are not implemented.
+Their tokens or surrounding syntax produce errors; unsupported syntax is never
+silently skipped. Macros remain disabled.
+
+## Compiler ownership and phase boundaries
+
+| Component | Responsibility |
 | --- | --- |
-| `compiler/lexer/lexer.cpp`, `tokens.hpp` | Raw tokens, decoded values and original half-open byte ranges. |
-| `compiler/lexer/layout.cpp` | Logical newlines and colon indentation boundaries. |
-| `compiler/parser/token_cursor.hpp` | Read-only bounded access to one EOF-terminated stream. |
-| `compiler/parser/parser.hpp/.cpp` | Grammar, precedence, diagnostics and recovery. |
-| `compiler/ast/ast.hpp` | Typed node classes, source spans and owning module trees. |
-| `compiler/ast/dump.hpp/.cpp` | Deterministic debug inspection of the tree. |
-| `compiler/driver/compiler_instance.hpp/.cpp` | Module traversal and ownership of successful results. |
+| `compiler/lexer/lexer.cpp`, `tokens.hpp` | Raw lexical tokens, decoded values and original byte spans. |
+| `compiler/lexer/layout.cpp` | Preserve physical newline boundaries, including newlines in intervening comments. No indentation policy. |
+| `compiler/parser/parser.cpp` | Module orchestration, statements, braces and recovery. |
+| `compiler/parser/types.cpp` | Structured type references and declaration lookahead. |
+| `compiler/parser/declarations.cpp` | Functions, declarations, records, loops, handlers and aliases. |
+| `compiler/parser/expressions.cpp` | Precedence, casts, collections and postfix syntax. |
+| `compiler/parser/strings.cpp` | Formatted-string expression parsing and original-source locations. |
+| `compiler/ast/ast.hpp`, `dump.cpp` | Compiler-owned nodes and deterministic inspection. |
+| `compiler/preprocessor/preprocessor.cpp` | Resolve import lists/aliases; retain module binding metadata. |
 
-`Lexer::tokenize()` remains the raw lexical API. `tokenize_layout()` adds layout
-markers and is the API used by preprocessing for the parser stream. This keeps
-layout interpretation separate from basic character/token recognition. Imports
-are parsed up to NEWLINE/semicolon and may only occur outside brace and indented
-blocks. Preprocessing preserves all remaining layout markers.
+`Lexer::tokenize()` remains the raw API and `tokenize_layout()` preserves
+Newline markers. The parser suppresses their separator role in continuation
+contexts. Quoted multiline contents do not introduce statement boundaries.
 
-The driver parses Ready modules in dependency-first order. Each call borrows
-one module and its diagnostics engine, returns an owning `ModuleAST`, and stores
-it in `CompilerContext::syntax_trees()` keyed by stable `ModuleID`. The module
-continues to own source bytes and tokens; module streams are never concatenated.
-`ModuleState::Ready` describes preprocessing, not parser success.
+The driver parses each Ready module separately in dependency-first order and
+stores successful trees in `CompilerContext::syntax_trees()` by `ModuleID`.
+Each module owns its source/tokens and import bindings (target ID, written name,
+optional alias and location). Imports are removed from parser tokens; their
+bindings remain available for future name visibility. Streams are never joined.
+`ModuleState::Ready` continues to mean preprocessing success.
 
-Nodes own children with `std::unique_ptr`; there are no owning back-pointers.
-Each node records `ModuleID`, start line/column and an original-source byte range
-`[begin, end)`. Escaped strings use their original source length, not decoded
-value length. Synthetic markers have zero-width spans. Numeric spellings are
-retained without evaluating or narrowing them in the parser. `TypeRef` holds a
-spelling, not a resolved semantic type. The AST outlives the Parser, and subsequent
-phases can store resolved symbols/types separately without depending on its cursor.
+AST nodes own children with `unique_ptr`; immutable type value-argument syntax
+can be shared across a declaration group. Type references preserve applications,
+unions, qualifiers and unresolved names. Spans identify a module and half-open
+original byte range plus start line/column, independent of decoded string length.
+F-string expressions retain their positions in the original file, even when
+nested. Trees remain valid after parser instances have been destroyed.
 
-## Errors, limits and inspection
+C-style syntax can require name lookup: `a * b` may be a declaration or a product,
+and `(T) + x * y` may be a cast or a grouped arithmetic expression. Unknown-name
+cases are retained explicitly as `AmbiguousStmt`/`UnresolvedExpr`; the latter
+keeps the **whole expression's tokens** because the choice affects precedence.
+Semantic name resolution must disambiguate/reparse these before using a resolved
+tree. Built-in and declared type names provide syntactic lookahead without
+claiming to resolve their meanings or validate aliases.
 
-Errors use the existing `DiagnosticsEngine` with the owning file and position.
-Recovery advances to a statement boundary while preserving enclosing block
-terminators. A module with any parser error yields no published AST. Other ready
-modules can still be inspected; semantic/backend phases are skipped if there are
-errors. Debug prints successful ASTs in dependency order after the existing token
-dump; Build/Run print no AST inspection.
+## Semantic work still pending
 
-Parsing is bounded to 256 recursive levels, expression tree height 256, 256
-operators/postfix operations per expression segment, and 32 syntax errors per
-module. Expression tree height is checked independently of parser recursion so
-long left-associated chains cannot exhaust the stack during dumping/destruction.
-These are implementation limits and produce diagnostics, not crashes.
+This change recognizes the syntax needed to implement these contracts, but does
+not yet check or execute them:
 
-## Validation
+- Fixed variable types, static specialization of implicit generics, numeric
+  conversions/promotions, return constraints and constant enforcement.
+- Type alias resolution/cycles, imported name visibility and overload selection.
+- `type()` evaluation and elimination of statically discarded specialization paths.
+- Default initialization of all collection elements, fixed array lengths,
+  reference validity and valid assignment results of calls.
+- Bounds checks, negative-index interpretation, catchable conversion/bounds errors,
+  exception unwinding, object lifetimes, destructors and allocation ownership.
+
+A semantically invalid but syntactically well-formed program can therefore still
+pass Debug parsing. Build/Run continue to report the pending backend/runtime;
+this is not a claim that these programs can already execute.
+
+## Diagnostics and verification
+
+Errors go through `DiagnosticsEngine` with source identity. Recovery advances to
+statement boundaries and preserves block terminators. A module with parser
+errors publishes no partial AST. Other ready modules can still be inspected;
+subsequent phases are skipped when errors exist. Debug dumps each successful AST;
+Build/Run do not print inspection output.
+
+Limits are 128 parser nesting levels, expression tree height 256 and 32 syntax
+errors per module. Height is checked independently of parser recursion, including
+collections, calls and formatted strings, to bound tree destruction/dumping.
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
@@ -140,11 +193,10 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-`parser` checks AST shapes, precedence/associativity, decoded source spans,
-ownership after parser destruction, both block styles and mixed nesting, optional
-semicolons, recovery, limits, truncated programs and deterministic randomized
-malformed inputs. `parser_integration` exercises real compiler sessions, imported
-module ownership/order, misplaced imports, dependency syntax errors, fixtures and
-backend limitations. Existing frontend, CLI and preprocessing suites stay active.
-The former CLI fixture with two adjacent same-line statements now uses the
-required semicolon; before parser integration that input was only tokenized.
+The tests check AST shape/ownership, precedence, casts and unresolved ambiguity,
+original spans, type restrictions/aliases, mixed collections, records, loops,
+exception syntax, string forms, multiline boundaries, module aliases, malformed
+imports, legacy syntax rejection, truncated programs and randomized malformed
+inputs. Fixtures follow the supplied examples with their agreed corrections;
+ellipses and intentionally semantic-only errors are not treated as executable
+implementations of unresolved runtime behavior.

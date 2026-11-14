@@ -48,10 +48,22 @@ const std::unordered_map<std::string_view, TokenType> operator_table = {
     { ">", TokenType::Greater },
     { "<=", TokenType::LessEqual },
     { ">=", TokenType::GreaterEqual },
+    { "::", TokenType::Scope },
     { "->", TokenType::Arrow },   // Not operator, but it have 2 chars; symbol_table accepts int type not string
 };
 
 const std::unordered_map<std::string_view, TokenType> keyword_table = {
+    { "double", TokenType::Double },
+    { "void", TokenType::Void },
+    { "unsigned", TokenType::Unsigned },
+    { "long", TokenType::Long },
+    { "short", TokenType::Short },
+    { "vector", TokenType::Vector },
+    { "alias", TokenType::Alias },
+    { "as", TokenType::As },
+    { "public", TokenType::Public },
+    { "private", TokenType::Private },
+    { "protected", TokenType::Protected },
     { "import", TokenType::Import },
     { "macro", TokenType::Macro },
     { "asm", TokenType::Asm },

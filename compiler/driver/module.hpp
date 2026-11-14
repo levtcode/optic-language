@@ -21,6 +21,13 @@ using ModuleID = std::uint32_t;
 inline constexpr ModuleID invalid_module_id = 0;
 inline constexpr std::string_view OPTIC_EXTENSION = ".optic";
 
+struct ImportBinding {
+    ModuleID target;
+    std::string name; // Written dotted name or path, without rewriting namespace visibility.
+    std::string alias; // Empty when no explicit `as` binding was requested.
+    unsigned line, column;
+};
+
 enum class ModuleState { Loaded, Processing, Ready, Failed };
 
 /// Owns the original source and the parser's token stream. Imports never concatenate sources.
@@ -35,6 +42,9 @@ public:
     std::vector<lexer::token_t>& get_tokens() noexcept { return tokens; }
     const std::vector<lexer::token_t>& get_tokens() const noexcept { return tokens; }
     const std::vector<ModuleID>& get_dependencies() const noexcept { return dependencies; }
+    const std::vector<ImportBinding>& get_imports() const noexcept { return imports; }
+    void clear_imports() { imports.clear(); }
+    void record_import(ImportBinding binding) { imports.push_back(std::move(binding)); }
     void set_buffer(std::string value) { buffer = std::move(value); }
     ModuleState state() const noexcept { return processing_state; }
     void set_state(ModuleState value) noexcept { processing_state = value; }
@@ -45,6 +55,7 @@ private:
     std::string buffer;
     std::vector<lexer::token_t> tokens;
     std::vector<ModuleID> dependencies;
+    std::vector<ImportBinding> imports;
     ModuleState processing_state = ModuleState::Loaded;
 };
 

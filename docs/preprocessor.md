@@ -15,6 +15,8 @@ Imports are module-scope statements. Use a dotted module name or a quoted path:
 import math.vector
 import "utilities.optic";
 import "folder with spaces/helper"
+import io, utils
+import system as os
 ```
 
 A dotted name maps to path components: `math.vector` loads `math/vector.optic`.
@@ -22,11 +24,13 @@ Quoted paths preserve their spelling. A path without an extension receives
 `.optic`; other extensions are rejected. Paths resolve relative to the importing
 module's directory, independently of the compiler's working directory. Absolute
 quoted paths are also supported. There is currently no package search path,
-implicit standard-library lookup, alias syntax or wildcard import.
+implicit standard-library lookup or wildcard import. Optional `as` bindings
+and comma-separated import lists are supported. Bindings are retained on the
+owning module for future semantic name resolution.
 
 An import ends at a semicolon or the end of its source line. Comments are
 handled by the lexer. Missing names, empty paths, embedded NUL bytes, trailing
-arguments and imports inside runtime brace or indented blocks produce errors
+arguments and imports inside runtime blocks or parenthesized/bracketed expressions produce errors
 at the import's source location. Strings and comments containing `import` remain ordinary
 strings and comments.
 
@@ -63,8 +67,9 @@ future library; compiler mode is selected through the CLI.
 one `Module` for each source file. `Module` owns:
 
 - The source path and original source bytes, retained for diagnostics.
-- The final token stream for that module, including logical `Newline`, `Indent`,
-  `Dedent` markers and exactly one `EndOfFile`.
+- The final token stream for that module, including physical `Newline`
+  markers and exactly one `EndOfFile`.
+- Import bindings (target module, written name, optional alias and source location).
 - Dependency IDs and preprocessing state (`Loaded`, `Processing`, `Ready`,
   `Failed`).
 
@@ -104,8 +109,9 @@ values without inspecting token text. Token kinds and debug names share the
 `tokens_types.def` definition list.
 Raw `r"..."` strings preserve backslashes and formatted `f"..."` strings retain
 their prefix token. Interpolation evaluation is not part of the lexer; formatted
-strings are rejected by the initial runtime parser. Multiline quoted strings
-are not supported.
+strings are parsed into literal segments and embedded expressions. Raw strings
+may contain literal newlines; normal strings support backslash-newline splicing
+and adjacent-string concatenation. See [parser syntax](parser.md).
 
 Unknown characters/escapes and unterminated strings/comments are diagnosed,
 including truncation at EOF. The lexer never silently discards an unknown byte.
@@ -146,8 +152,8 @@ import log. Logs use the same runtime Debug condition as the other frontend dump
 
 The summary lists input count, unique loaded modules, import requests, successful
 and failed imports, lexical tokens and new errors. Import counts refer to
-statements encountered, so repeated imports count separately while graph edges
-remain unique. Token counts exclude EOF.
+requested modules (each entry in a list counts separately), so repeated imports
+count separately while graph edges remain unique. Token counts exclude EOF.
 
 The graph prints all loaded modules, including failed ones: stable IDs, canonical
 paths, processing state, source bytes, output token counts, dependency IDs and

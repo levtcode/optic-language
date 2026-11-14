@@ -1,13 +1,16 @@
-function add(a: int, b: int) -> int:
-    return a + b
-
+function add(a, b) { return a + b }
 function main() {
+    array[int, 4] arr = {1, 2, 3, 4}
+    for (int i = 0; i < arr.length; i++) {
+        arr[i] = i
+    }
     int result = add(
         1,
         2 * 3
     )
-    while result > 0:
+    while result > 0 {
         if result == 2 { break }
         result = result - 1
+    }
     print(result); return 0
 }

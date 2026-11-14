@@ -31,6 +31,10 @@ add_library(optic_frontend STATIC
     compiler/lexer/lexer.cpp
     compiler/lexer/layout.cpp
     compiler/parser/parser.cpp
+    compiler/parser/types.cpp
+    compiler/parser/declarations.cpp
+    compiler/parser/expressions.cpp
+    compiler/parser/strings.cpp
     compiler/ast/dump.cpp
     compiler/preprocessor/preprocessor.cpp
 )

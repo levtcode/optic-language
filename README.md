@@ -38,8 +38,9 @@ function main() {
 
 ```c++
 function fibonacci(n: int) -> int {
-    if n <= 1:
-        return n;
+    if n <= 1 {
+        return n
+    }
 
     return fibonacci(n - 1) + fibonacci(n - 2)
 }
@@ -48,15 +49,16 @@ function fibonacci(n: int) -> int {
 ### Binary Search:
 
 ```c++
-function binary_search(&arr: array[int], x: int) -> int {
+function binary_search(arr: array[int], x: int) -> int {
     int low = 0
     int high = arr.size() - 1
 
     while (low <= high) {
         int mid = low + (high - low) / 2
 
-        if arr[mid] == x:
+        if arr[mid] == x {
             return mid
+        }
 
         if arr[mid] < x {
             low = mid + 1
@@ -81,7 +83,8 @@ Optic is currently in the **pre-alpha** stage.
 - Driver
 - Lexer
 - Token preprocessing and recursive module imports
-- Initial AST parser with brace/indentation blocks and optional semicolons
+- AST parser with brace blocks, bracketed type arguments, implicit generic syntax,
+  collections, records, casts and optional semicolons
 
 
 ### In Progress

@@ -1,38 +1,53 @@
-(* Initial runtime Optic grammar. NEWLINE/INDENT/DEDENT are produced by layout normalization.
-   Keywords for later features are reserved but rejected. Imports are removed before parsing. *)
-module         = { separator | statement } , EOF ;
-statement      = function | variable , end | if_stmt | while_stmt | block
-               | "return" , [ expression ] , end
-               | ( "break" | "continue" ) , end
-               | expression , end ;
-function       = "function" , identifier , "(" , [ parameter , { "," , parameter } ] , ")"
-               , [ "->" , type ] , block ;
-parameter      = identifier , ":" , type | type , identifier ;
-type           = "int" | "float" | "bool" | "string" | "char" | identifier ;
-variable       = type , identifier , [ "=" , { NEWLINE } , expression ] ;
-block          = { NEWLINE } , "{" , { separator | statement } , "}"
-               | ":" , NEWLINE , { NEWLINE } , INDENT , { separator | statement } , DEDENT ;
-if_stmt        = "if" , expression , block , { NEWLINE }
-               , [ "elif" , expression , block , { NEWLINE }
-                   , { "elif" , expression , block , { NEWLINE } }
-                   , [ "else" , block ]
-                 | "else" , block ] ;
-while_stmt     = "while" , expression , block ;
-expression     = assignment ;
-assignment     = logical_or , [ "=" , { NEWLINE } , assignment ] ;
-logical_or     = logical_and , { ( "or" | "||" ) , { NEWLINE } , logical_and } ;
-logical_and    = equality , { ( "and" | "&&" ) , { NEWLINE } , equality } ;
-equality       = comparison , { ( "==" | "!=" ) , { NEWLINE } , comparison } ;
-comparison     = sum , { ( "<" | "<=" | ">" | ">=" ) , { NEWLINE } , sum } ;
-sum            = product , { ( "+" | "-" ) , { NEWLINE } , product } ;
-product        = unary , { ( "*" | "/" | "%" ) , { NEWLINE } , unary } ;
-unary          = ( "+" | "-" | "not" | "!" ) , { NEWLINE } , unary | postfix ;
-postfix        = primary , { "(" , [ expression , { "," , expression } ] , ")"
-                          | "." , identifier } ;
-primary        = identifier | literal | "(" , expression , ")" ;
-literal        = integer | float | string | character | raw_string | "true" | "false" | "null" ;
-separator      = NEWLINE | ";" ;
-end            = ";" | NEWLINE | ? boundary before DEDENT, '}', or EOF without consuming it ? ;
-(* Functions are module-scope only. Assignment targets must be names or member accesses.
-   A newline immediately after return terminates it. No trailing argument/parameter commas yet.
-   Parenthesized/bracketed physical newlines do not emit NEWLINE tokens. *)
+(* Runtime syntax summary. Physical NEWLINE markers are ignored in continuation
+   contexts. Semantic type/name resolution, implicit generic specialization and
+   the declaration/expression ambiguities described in parser.md are separate. *)
+module       = { separator | declaration | statement }, EOF ;
+declaration  = function | record | alias | variables, end ;
+function     = "function", name, parameters, ["->", type], block ;
+parameters   = "(", [parameter, {",", parameter}, [","]], ")" ;
+parameter    = name, [":", type] ;
+record       = ("class" | "struct"), name, "{", {separator | member}, "}" ;
+member       = [("public" | "private" | "protected")],
+               (function | name, parameters, block | variables, end | alias) ;
+alias        = "alias", (named_type | "[", type, "]"), "as", name, end ;
+type         = type_atom, {"|", type_atom} ;
+type_atom    = ["const"], named_type, ["[", type_argument, {",", type_argument}, [","], "]"],
+               {"*"}, ["&"] ;
+named_type   = builtin | name, {"::", name} ;
+builtin      = "int" | "float" | "double" | "bool" | "string" | "char" | "void"
+             | "unsigned", {"long" | "short" | "int"} | "long", {"long" | "int"}
+             | "short", ["int"] | "array" | "vector" | "dict" | "tuple" ;
+type_argument = type | non_assignment_expression ;
+variables    = type_atom, name, ["=", expression], {",", name, ["=", expression]} ;
+block        = "{", {separator | statement}, "}" ;
+statement    = variables, end | alias | block | if | while | for | try
+             | "return", [expression], end | "throw", expression, end
+             | ("break" | "continue"), end | expression, end ;
+if           = "if", expression, block, ["else", (if | block)] ;
+while        = "while", expression, block ;
+for          = "for", "(", [variables | expression], ";", [expression], ";",
+               [expression, {",", expression}], ")", block ;
+try          = "try", block, "catch", "(", type, name, ")", block,
+               {"catch", "(", type, name, ")", block} ;
+expression   = non_assignment_expression, [assignment_operator, expression] ;
+(* Binary operators in increasing precedence; each group associates left. *)
+non_assignment_expression = ? precedence-climbed unary expressions using:
+    or || ; and && ; | ; ^ ; & ; == != ; < <= > >= ; << >> ; + - ; * / % ? ;
+assignment_operator = "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "<<=" | ">>=" ;
+unary        = ("+" | "-" | "not" | "!" | "~" | "&" | "*" | "++" | "--" | "delete"), unary
+             | "(", type, ")", unary | "new", type_atom, arguments | postfix ;
+postfix      = primary, {arguments | "[", expression, "]" | ("." | "::"), name | "++" | "--"} ;
+arguments    = "(", [expression, {",", expression}, [","]], ")" ;
+primary      = name | literal | "(", expression, ")"
+             | "(", [expression, ",", {expression, ","}, [expression]], ")"
+             | "[", [expression, {",", expression}, [","]], "]"
+             | "{", [expression, {",", expression}, [","]], "}"
+             | "{", expression, ":", expression, {",", expression, ":", expression}, [","], "}" ;
+literal      = integer | float | character | "true" | "false" | "null"
+             | string, {string} | raw_string, {string | raw_string} | formatted_string ;
+separator    = NEWLINE | ";" ;
+end          = ";" | NEWLINE | ? boundary before '}' or EOF without consuming it ? ;
+(* Imports are handled by preprocessing, keeping bindings in Module:
+   import dotted.name [as binding], other.name [as binding]
+   import "relative/path.optic" [as binding]
+   An import statement ends at a physical newline, semicolon or EOF. *)
