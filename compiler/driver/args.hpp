@@ -14,10 +14,10 @@
 
 namespace optic::compiler::driver {
 
-void print_args_files(std::vector<std::string>&);
-void print_args_options(std::unordered_map<std::string, ArgValue>&);
-void print_args_flags(std::unordered_map<std::string, bool>&);
-void print_args(CompilerConfig&);
+void print_args_files(const std::vector<std::string>&);
+void print_args_options(const std::unordered_map<std::string, ArgValue>&);
+void print_args_flags(const std::unordered_map<std::string, bool>&);
+void print_args(const CompilerConfig&);
 
 ArgValue parse_value(const std::string_view& option_name, size_t* index);
 int match_compiler_arg(const std::string_view& arg, size_t* index);
