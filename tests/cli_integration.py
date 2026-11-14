@@ -4,6 +4,7 @@ Run through CTest, which supplies optic, opticc and the fixture executable paths
 Every subprocess has a timeout so a regression cannot leave a test hanging.
 """
 import os
+import re
 from pathlib import Path
 import shutil
 import signal
@@ -100,7 +101,7 @@ class CliIntegration(unittest.TestCase):
         source = self.source()
         result = self.run_tool(OPTIC, "debug", "--color-diagnostics=disable", "-g", "-g", source)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(b"Token type:", result.stdout)
+        self.assertIn(b"Representation", result.stdout)
         self.assertIn(b"--color-diagnostics = disable", result.stdout)
         self.assertIn(b"-g -> on", result.stdout)
         self.assertIn(str(source).encode(), result.stdout)
@@ -120,7 +121,7 @@ class CliIntegration(unittest.TestCase):
         self.assertIn(b"[preprocessor] Imported " + str(directory / "file2.optic").encode(), result.stdout)
         self.assertIn(b"Modules: 2, edges: 1, ready: 2, failed: 0", result.stdout)
         self.assertIn(b"Dependency-first order: [2, 1]", result.stdout)
-        self.assertEqual(result.stdout.count(b"Token value: 'hello'"), 2)
+        self.assertEqual(len(re.findall(rb'Identifier +"hello"', result.stdout)), 2)
 
     def test_compiler_errors_and_backend_limitations(self):
         source = self.source()

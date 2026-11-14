@@ -5,6 +5,7 @@
 
 #include "compiler/driver/module.hpp"
 
+#include <iosfwd>
 #include <string>
 #include <vector>
 
@@ -19,6 +20,7 @@ public:
     /// Parser stream, including physical newline boundaries; indentation has no syntax.
     void tokenize_layout(std::vector<token_t>& tokens);
     static void print_tokens(const driver::Module& module);
+    static void print_tokens(const driver::Module& module, std::ostream& out);
 
 private:
     driver::Module& module;

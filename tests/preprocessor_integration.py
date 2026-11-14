@@ -1,6 +1,7 @@
 """Run real compiler preprocessing sessions with isolated module trees."""
 from pathlib import Path
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -32,13 +33,13 @@ class PreprocessorIntegration(unittest.TestCase):
         main = self.source("main.optic", 'import "mid";\nimport "lib/leaf.optic";\nimport "./mid.optic";\nmain_value\n')
         result = self.run_compiler(main, mid)
         self.assertEqual(result.returncode, 0, result.stderr)
-        values = [b"Token value: '" + value + b"'" for value in (b"leaf_value", b"mid_value", b"main_value")]
+        values = [b'"' + value + b'"' for value in (b"leaf_value", b"mid_value", b"main_value")]
         for value in values:
             self.assertEqual(result.stdout.count(value), 1)
         self.assertLess(result.stdout.index(values[0]), result.stdout.index(values[1]))
         self.assertLess(result.stdout.index(values[1]), result.stdout.index(values[2]))
-        self.assertNotIn(b"Token type: Import", result.stdout)
-        self.assertEqual(result.stdout.count(b"Token type: EndOfFile"), 3)
+        self.assertNotIn(b"  Import  ", result.stdout)
+        self.assertEqual(result.stdout.count(b"EndOfFile"), 3)
         self.assertIn(str(leaf).encode(), result.stdout)
 
     def test_relative_to_importer_and_spaces(self):
@@ -46,7 +47,7 @@ class PreprocessorIntegration(unittest.TestCase):
         main = self.source("folder with spaces/main.optic", 'import "dep.optic"\nmain\n')
         result = self.run_compiler(main)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(b"Token value: 'dependency'", result.stdout)
+        self.assertRegex(result.stdout, rb'Identifier +"dependency"')
 
     def test_cycle_and_self_import_are_errors(self):
         a = self.source("a.optic", 'import "b.optic"\n')
@@ -72,9 +73,9 @@ class PreprocessorIntegration(unittest.TestCase):
         main = self.source("main.optic", '// import missing\n/* import missing */\n"import missing /"\nidentifier_1/2')
         result = self.run_compiler(main)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(b"Token value: 'identifier_1'\nAt line: 4, in column: 1", result.stdout)
-        self.assertIn(b"Token type: Slash", result.stdout)
-        self.assertIn(b"Token value: 'import missing /'", result.stdout)
+        self.assertRegex(result.stdout, rb'4:1 +Identifier +"identifier_1"')
+        self.assertRegex(result.stdout, rb'Slash +"/"')
+        self.assertRegex(result.stdout, rb'StringLiteral +"import missing /"')
         empty = self.source("empty.optic", "")
         self.assertEqual(self.run_compiler(empty).returncode, 0)
         end = self.source("end.optic", "/* comment */")
@@ -87,7 +88,7 @@ class PreprocessorIntegration(unittest.TestCase):
         main = self.source("main.optic", 'import "dep.optic"\nimport "alias.optic"\n')
         result = self.run_compiler(main)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.count(b"Token value: 'only_once'"), 1)
+        self.assertEqual(len(re.findall(rb'Identifier +"only_once"', result.stdout)), 1)
 
     def test_directories_and_special_files_are_rejected(self):
         (self.root / "directory.optic").mkdir()
@@ -126,7 +127,7 @@ class PreprocessorIntegration(unittest.TestCase):
                 self.assertIn(b"Modules: 2, edges: 1, ready: 2, failed: 0", result.stdout)
                 self.assertIn(b"Imported by:", result.stdout)
                 self.assertIn(b"Dependency-first order:", result.stdout)
-                self.assertEqual(result.stdout.count(b"Token value: 'dependency'"), 1)
+                self.assertEqual(len(re.findall(rb'Identifier +"dependency"', result.stdout)), 1)
         for mode in ("build", "run"):
             result = self.run_compiler(main, dep, mode=mode)
             for marker in (b"[opticc]", b"[preprocessor]", b"PREPROCESSOR SUMMARY", b"MODULE DEPENDENCIES"):
@@ -143,7 +144,7 @@ class PreprocessorIntegration(unittest.TestCase):
         self.assertIn(b"Successful imports: 1", result.stdout)
         self.assertIn(b"Failed imports: 1", result.stdout)
         self.assertIn(b"Token dump skipped", result.stdout)
-        self.assertNotIn(b"Token type:", result.stdout)
+        self.assertNotIn(b"Representation", result.stdout)
         missing = self.run_compiler("absent.optic")
         self.assertIn(b"Modules: 0, edges: 0", missing.stdout)
         self.assertIn(b"Result: failed", missing.stdout)
@@ -171,15 +172,15 @@ class PreprocessorIntegration(unittest.TestCase):
         main = self.source("main.optic", "M.to_string()\n")
         result = self.run_compiler(main)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(b"Token value: 'M'", result.stdout)
-        self.assertIn(b"Token value: 'to_string'", result.stdout)
+        self.assertRegex(result.stdout, rb'Identifier +"M"')
+        self.assertRegex(result.stdout, rb'Identifier +"to_string"')
         self.assertNotIn(b"PREPROCESSOR MACROS", result.stdout)
 
     def test_debug_mode_is_independent_of_build_configuration(self):
         main = self.source("main.optic", "hello")
         self.assertIn(b"MODULE DEPENDENCIES", self.run_compiler(main).stdout)
         result = self.run_compiler(main, mode="build")
-        self.assertNotIn(b"Token type:", result.stdout)
+        self.assertNotIn(b"Representation", result.stdout)
         self.assertIn(b"not implemented", result.stderr)
 
 
