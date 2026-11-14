@@ -1,0 +1,53 @@
+(* Runtime syntax summary. Physical NEWLINE markers are ignored in continuation
+   contexts. Semantic type/name resolution, implicit generic specialization and
+   the declaration/expression ambiguities described in parser.md are separate. *)
+module       = { separator | declaration | statement }, EOF ;
+declaration  = function | record | alias | variables, end ;
+function     = "function", name, parameters, ["->", type], block ;
+parameters   = "(", [parameter, {",", parameter}, [","]], ")" ;
+parameter    = name, [":", type] ;
+record       = ("class" | "struct"), name, "{", {separator | member}, "}" ;
+member       = [("public" | "private" | "protected")],
+               (function | name, parameters, block | variables, end | alias) ;
+alias        = "alias", (named_type | "[", type, "]"), "as", name, end ;
+type         = type_atom, {"|", type_atom} ;
+type_atom    = ["const"], named_type, ["[", type_argument, {",", type_argument}, [","], "]"],
+               {"*"}, ["&"] ;
+named_type   = builtin | name, {"::", name} ;
+builtin      = "int" | "float" | "double" | "bool" | "string" | "char" | "void"
+             | "unsigned", {"long" | "short" | "int"} | "long", {"long" | "int"}
+             | "short", ["int"] | "array" | "vector" | "dict" | "tuple" ;
+type_argument = type | non_assignment_expression ;
+variables    = type_atom, name, ["=", expression], {",", name, ["=", expression]} ;
+block        = "{", {separator | statement}, "}" ;
+statement    = variables, end | alias | block | if | while | for | try
+             | "return", [expression], end | "throw", expression, end
+             | ("break" | "continue"), end | expression, end ;
+if           = "if", expression, block, ["else", (if | block)] ;
+while        = "while", expression, block ;
+for          = "for", "(", [variables | expression], ";", [expression], ";",
+               [expression, {",", expression}], ")", block ;
+try          = "try", block, "catch", "(", type, name, ")", block,
+               {"catch", "(", type, name, ")", block} ;
+expression   = non_assignment_expression, [assignment_operator, expression] ;
+(* Binary operators in increasing precedence; each group associates left. *)
+non_assignment_expression = ? precedence-climbed unary expressions using:
+    or || ; and && ; | ; ^ ; & ; == != ; < <= > >= ; << >> ; + - ; * / % ? ;
+assignment_operator = "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "<<=" | ">>=" ;
+unary        = ("+" | "-" | "not" | "!" | "~" | "&" | "*" | "++" | "--" | "delete"), unary
+             | "(", type, ")", unary | "new", type_atom, arguments | postfix ;
+postfix      = primary, {arguments | "[", expression, "]" | ("." | "::"), name | "++" | "--"} ;
+arguments    = "(", [expression, {",", expression}, [","]], ")" ;
+primary      = name | literal | "(", expression, ")"
+             | "(", [expression, ",", {expression, ","}, [expression]], ")"
+             | "[", [expression, {",", expression}, [","]], "]"
+             | "{", [expression, {",", expression}, [","]], "}"
+             | "{", expression, ":", expression, {",", expression, ":", expression}, [","], "}" ;
+literal      = integer | float | character | "true" | "false" | "null"
+             | string, {string} | raw_string, {string | raw_string} | formatted_string ;
+separator    = NEWLINE | ";" ;
+end          = ";" | NEWLINE | ? boundary before '}' or EOF without consuming it ? ;
+(* Imports are handled by preprocessing, keeping bindings in Module:
+   import dotted.name [as binding], other.name [as binding]
+   import "relative/path.optic" [as binding]
+   An import statement ends at a physical newline, semicolon or EOF. *)

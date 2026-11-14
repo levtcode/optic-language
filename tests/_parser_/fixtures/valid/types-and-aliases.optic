@@ -1,0 +1,16 @@
+alias [int | float | double | string] as func1_params
+alias [unsigned long] as size_t
+alias size_t as bytes_t
+function add(a: func1_params, b: func1_params) -> func1_params { return a + b }
+function implicit_add(a, b) { return a + b }
+function calc(offset, bytes, size) -> unsigned long {
+    return offset +
+        bytes *
+        size
+}
+int x = 5, y = 2
+const size_t bytes = 1024
+result = (int) (x / y)
+implicit_add(1, 2)
+implicit_add(1, 1.2)
+implicit_add("1", "2")

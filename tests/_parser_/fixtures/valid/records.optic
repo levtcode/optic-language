@@ -1,0 +1,22 @@
+class Book {
+    public string name
+    public string author
+    public int isbn
+    public double price
+    private int stock
+    Book(name, author, isbn, price) {
+        self.name = name
+        self.author = author
+        self.isbn = isbn
+        self.price = price
+    }
+    public function get_stock() -> int { return self.stock }
+    public function add_book(quantity: int) -> void { self.stock += quantity }
+}
+struct Tree {
+    int id
+    Tree *next
+}
+Tree *root = new Tree()
+if (not root) { print("error") }
+delete root

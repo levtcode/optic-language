@@ -29,6 +29,13 @@ add_library(optic_frontend STATIC
     compiler/driver/diagnostics_engine.cpp
     compiler/driver/module.cpp
     compiler/lexer/lexer.cpp
+    compiler/lexer/layout.cpp
+    compiler/parser/parser.cpp
+    compiler/parser/types.cpp
+    compiler/parser/declarations.cpp
+    compiler/parser/expressions.cpp
+    compiler/parser/strings.cpp
+    compiler/ast/dump.cpp
     compiler/preprocessor/preprocessor.cpp
 )
 optic_configure_target(optic_frontend)
@@ -49,6 +56,11 @@ if(BUILD_TESTING)
     optic_configure_target(optic_frontend_tests)
     add_test(NAME frontend COMMAND optic_frontend_tests)
     set_tests_properties(frontend PROPERTIES TIMEOUT 30)
+    add_executable(optic_parser_tests tests/_parser_/parser_tests.cpp)
+    target_link_libraries(optic_parser_tests PRIVATE optic_frontend)
+    optic_configure_target(optic_parser_tests)
+    add_test(NAME parser COMMAND optic_parser_tests)
+    set_tests_properties(parser PROPERTIES TIMEOUT 30)
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
         add_executable(optic_test_component tests/cli_component.cpp)
@@ -59,5 +71,8 @@ if(BUILD_TESTING)
         add_test(NAME preprocessor_integration COMMAND "${Python3_EXECUTABLE}"
             "${PROJECT_SOURCE_DIR}/tests/preprocessor_integration.py" "$<TARGET_FILE:opticc>")
         set_tests_properties(cli_integration preprocessor_integration PROPERTIES TIMEOUT 90)
+        add_test(NAME parser_integration COMMAND "${Python3_EXECUTABLE}"
+            "${PROJECT_SOURCE_DIR}/tests/_parser_/parser_integration.py" "$<TARGET_FILE:opticc>")
+        set_tests_properties(parser_integration PROPERTIES TIMEOUT 90)
     endif()
 endif()

@@ -38,8 +38,9 @@ function main() {
 
 ```c++
 function fibonacci(n: int) -> int {
-    if n <= 1:
-        return n;
+    if n <= 1 {
+        return n
+    }
 
     return fibonacci(n - 1) + fibonacci(n - 2)
 }
@@ -48,15 +49,16 @@ function fibonacci(n: int) -> int {
 ### Binary Search:
 
 ```c++
-function binary_search(&arr: array[int], x: int) -> int {
+function binary_search(arr: array[int], x: int) -> int {
     int low = 0
     int high = arr.size() - 1
 
     while (low <= high) {
         int mid = low + (high - low) / 2
 
-        if arr[mid] == x:
+        if arr[mid] == x {
             return mid
+        }
 
         if arr[mid] < x {
             low = mid + 1
@@ -81,12 +83,13 @@ Optic is currently in the **pre-alpha** stage.
 - Driver
 - Lexer
 - Token preprocessing and recursive module imports
+- AST parser with brace blocks, bracketed type arguments, implicit generic syntax,
+  collections, records, casts and optional semicolons
 
 
 ### In Progress
 
 
-- Parser
 - Semantic analysis
 - Intermediate representation (IR)
 
@@ -110,7 +113,8 @@ flowchart TD
     C --> D["Compiler driver"]
     D --> F["Preprocessor / Module graph"]
     F --> E["Lexer"]
-    F -. pending .-> I["Parser / Semantic analysis"]
+    F --> I["Parser → AST"]
+    I -. pending .-> J["Semantic analysis"]
     D -. pending .-> G["IR / Optimizer / Code generation / Linker"]
     B -. planned .-> H["Runtime / Package manager / Debugger"]
 ```
@@ -132,9 +136,13 @@ ctest --test-dir build --output-on-failure
 A C++23 toolchain with `<format>` support and CMake 3.20+ are required. Python 3
 is optional for integration tests. Both `optic` and `opticc` install into `bin`.
 
-`debug` prints compiler configuration, module dependencies, imports and preprocessed tokens. `build` and
+`debug` prints compiler configuration, module dependencies, imports, preprocessed tokens
+and per-module ASTs. `build` and
 `run` fail explicitly after frontend analysis because code generation and the
 runtime are pending. Package commands are also unimplemented.
+
+See [parser architecture and initial syntax](docs/parser.md) for blocks, statement
+boundaries, supported expressions and AST ownership.
 
 See [preprocessing and module ownership](docs/preprocessor.md) for import syntax,
 source locations and the parser integration contract, and [macros](docs/macros.md)

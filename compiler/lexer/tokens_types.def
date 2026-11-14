@@ -108,8 +108,23 @@ X(StringLiteral)
 X(CharLiteral)
 
 // ===== Special =====
+X(Newline)
 X(LiteralTrue)
 X(LiteralFalse)
 X(FString)
 X(RawString)
 X(EndOfFile)
+
+// Runtime language declarations and qualified names
+X(Double)
+X(Void)
+X(Unsigned)
+X(Long)
+X(Short)
+X(Vector)
+X(Alias)
+X(As)
+X(Public)
+X(Private)
+X(Protected)
+X(Scope)
