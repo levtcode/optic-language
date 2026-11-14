@@ -165,3 +165,31 @@ tracing, while preserving or explicitly migrating the current `debug` command.
 Package management should live in its own component and share internal operations
 for install/uninstall/reinstall. Persistent IPC should be introduced only if a
 component needs interactive requests or useful state between commands.
+
+## Debug configuration table
+
+Debug prints the effective configuration, including default values, before
+preprocessing. Input files retain their command-line order. Option and flag names
+are sorted lexicographically so repeated runs have a stable layout.
+
+```text
+Compiler configuration
+
+  Input files
+    .vscode/file1.optic
+
+  Options
+    Name                  Value
+    --------------------  -----
+    --color-diagnostics   auto
+
+  Flags
+    Name                  State
+    --------------------  --------
+    -Wall                 disabled
+    -g                    disabled
+```
+
+Option values retain their typed representation; boolean options use `true` or
+`false`. Flags use `enabled` or `disabled`. Name columns expand for longer names.
+Build and Run do not print the configuration table.

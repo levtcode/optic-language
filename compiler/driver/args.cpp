@@ -7,62 +7,77 @@
 
 #include "compiler/driver/args.hpp"
 
+#include <algorithm>
 #include <charconv>
 #include <iostream>
+#include <map>
+#include <sstream>
 
 namespace optic::compiler::driver {
 
-/* */
-void print_args_files(std::vector<std::string>& files) {
-    std::cout << "Files:\n";
-    for (const auto& f : files) {
-        std::cout << "  " << f << "\n";
+namespace {
+constexpr std::size_t minimum_name_width = 20;
+
+std::string option_value(const ArgValue& value) {
+    std::ostringstream out;
+    std::visit(
+        [&out](const auto& item) {
+            using T = std::decay_t<decltype(item)>;
+            if constexpr (std::is_same_v<T, bool>) {
+                out << (item ? "true" : "false");
+            } else {
+                out << item;
+            }
+        },
+        value);
+    return out.str();
+}
+
+void print_settings(const std::string& heading,
+                    const std::string& value_heading,
+                    const std::map<std::string, std::string>& settings) {
+    auto name_width = minimum_name_width;
+    for (const auto& [name, value] : settings) {
+        name_width = std::max(name_width, name.size());
+    }
+
+    std::cout << "\n  " << heading << "\n"
+              << "    Name" << std::string(name_width - 4, ' ') << "  " << value_heading << "\n"
+              << "    " << std::string(name_width, '-') << "  "
+              << std::string(value_heading == "State" ? 8 : value_heading.size(), '-') << "\n";
+    for (const auto& [name, value] : settings) {
+        std::cout << "    " << name << std::string(name_width - name.size(), ' ') << "  " << value
+                  << "\n";
+    }
+}
+} // namespace
+
+void print_args_files(const std::vector<std::string>& files) {
+    std::cout << "  Input files\n";
+    for (const auto& file : files) {
+        std::cout << "    " << file << "\n";
     }
 }
 
-/* */
-void print_args_options(std::unordered_map<std::string, ArgValue>& options) {
-    std::cout << "\nCompiler options:\n";
-    for (const auto& [key, value] : options) {
-        std::cout << "  " << key << " = ";
-
-        std::visit(
-            [](const auto& v) {
-                using T = std::decay_t<decltype(v)>;
-
-                if constexpr (std::is_same_v<T, bool>) {
-                    std::cout << (v ? "true" : "false");
-                } else {
-                    std::cout << v;
-                }
-            },
-            value);
-
-        std::cout << "\n";
+void print_args_options(const std::unordered_map<std::string, ArgValue>& options) {
+    std::map<std::string, std::string> rows;
+    for (const auto& [name, value] : options) {
+        rows.emplace(name, option_value(value));
     }
+    print_settings("Options", "Value", rows);
 }
 
-/* */
-void print_args_flags(std::unordered_map<std::string, bool>& flags) {
-    std::cout << "\nCompiler flags:\n";
-    for (const auto& [key, value] : flags) {
-        std::cout << "  " << key << " -> ";
-
-        if (value == true) {
-            std::cout << "on";
-        } else {
-            std::cout << "off";
-        }
-
-        std::cout << "\n";
+void print_args_flags(const std::unordered_map<std::string, bool>& flags) {
+    std::map<std::string, std::string> rows;
+    for (const auto& [name, enabled] : flags) {
+        rows.emplace(name, enabled ? "enabled" : "disabled");
     }
+    print_settings("Flags", "State", rows);
     std::cout << "\n";
 }
 
-/* */
-void print_args(CompilerConfig& config) {
-
-    std::cout << "----- PRINTING COMPILER ARGUMENTS -----\n\n";
+void print_args(const CompilerConfig& config) {
+    std::cout << "Compiler configuration\n\n";
     print_args_files(config.input_files);
     print_args_options(config.options);
     print_args_flags(config.flags);

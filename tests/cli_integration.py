@@ -4,6 +4,7 @@ Run through CTest, which supplies optic, opticc and the fixture executable paths
 Every subprocess has a timeout so a regression cannot leave a test hanging.
 """
 import os
+import re
 from pathlib import Path
 import shutil
 import signal
@@ -100,13 +101,42 @@ class CliIntegration(unittest.TestCase):
         source = self.source()
         result = self.run_tool(OPTIC, "debug", "--color-diagnostics=disable", "-g", "-g", source)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(b"Token type:", result.stdout)
-        self.assertIn(b"--color-diagnostics = disable", result.stdout)
-        self.assertIn(b"-g -> on", result.stdout)
+        self.assertIn(b"Representation", result.stdout)
+        self.assertRegex(result.stdout, rb"--color-diagnostics +disable")
+        self.assertRegex(result.stdout, rb"-g +enabled")
         self.assertIn(str(source).encode(), result.stdout)
         self.assertEqual(self.run_tool(OPTICC, "debug", source).returncode, 0)
         dash_source = self.source("-dash.optic")
         self.assertEqual(self.run_tool(OPTICC, "debug", "--", dash_source.name).returncode, 0)
+
+    def test_configuration_table_and_default_states(self):
+        source = self.source()
+        result = self.run_tool(OPTICC, "debug", source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        expected = (
+            "Compiler configuration\n\n"
+            "  Input files\n"
+            f"    {source}\n"
+            "\n  Options\n"
+            "    Name                  Value\n"
+            "    --------------------  -----\n"
+            "    --color-diagnostics   auto\n"
+            "\n  Flags\n"
+            "    Name                  State\n"
+            "    --------------------  --------\n"
+            "    -Wall                 disabled\n"
+            "    -g                    disabled\n\n"
+        ).encode()
+        self.assertIn(expected, result.stdout)
+        repeated = self.run_tool(OPTICC, "debug", source)
+        self.assertEqual(repeated.stdout, result.stdout)
+        enabled = self.run_tool(OPTICC, "debug", "-Wall", "-g", source)
+        self.assertEqual(enabled.returncode, 0, enabled.stderr)
+        self.assertRegex(enabled.stdout, rb"-Wall +enabled")
+        self.assertRegex(enabled.stdout, rb"-g +enabled")
+        for mode in ("build", "run"):
+            result = self.run_tool(OPTICC, mode, source)
+            self.assertNotIn(b"Compiler configuration", result.stdout)
 
     def test_debug_two_sources_in_vscode_through_cli(self):
         directory = self.directory / ".vscode"
@@ -120,7 +150,7 @@ class CliIntegration(unittest.TestCase):
         self.assertIn(b"[preprocessor] Imported " + str(directory / "file2.optic").encode(), result.stdout)
         self.assertIn(b"Modules: 2, edges: 1, ready: 2, failed: 0", result.stdout)
         self.assertIn(b"Dependency-first order: [2, 1]", result.stdout)
-        self.assertEqual(result.stdout.count(b"Token value: 'hello'"), 2)
+        self.assertEqual(len(re.findall(rb'Identifier +"hello"', result.stdout)), 2)
 
     def test_compiler_errors_and_backend_limitations(self):
         source = self.source()

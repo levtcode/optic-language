@@ -123,9 +123,58 @@ void lexer_checks() {
         }
     }
 }
+
+void token_dump_checks() {
+    driver::Module module("sample.optic");
+    module.get_tokens() = {
+        {lexer::TokenType::LeftParen, "(", 1, 14},
+        {lexer::TokenType::RightParen, ")", 1, 15},
+        {lexer::TokenType::LeftBrace, "{", 1, 17},
+        {lexer::TokenType::Newline, "", 1, 18},
+        {lexer::TokenType::EndOfFile, "EOF", 2, 1},
+    };
+    std::ostringstream output;
+    lexer::Lexer::print_tokens(module, output);
+    check(output.str() == "Tokens - sample.optic\n\n"
+                          "  Line:Col  Type        Representation\n"
+                          "  --------  ----------  --------------\n"
+                          "      1:14  LeftParen   \"(\"\n"
+                          "      1:15  RightParen  \")\"\n"
+                          "      1:17  LeftBrace   \"{\"\n"
+                          "      1:18  Newline     \"\\n\"\n"
+                          "       2:1  EndOfFile   —\n\n",
+          "compact token table layout");
+    check(module.get_tokens()[3].value.empty() && module.get_tokens()[4].value == "EOF",
+          "presentation must not modify token values");
+
+    std::string controls = "\"\\\n\r\t";
+    controls += '\0';
+    controls += '\x1b';
+    controls += " Ω";
+    module.get_tokens() = {{lexer::TokenType::StringLiteral, controls, 123456789, 123456789},
+                           {lexer::TokenType::StringLiteral, "", 2, 1}};
+    output.str("");
+    output.clear();
+    lexer::Lexer::print_tokens(module, output);
+    check(output.str().find(
+              "123456789:123456789  StringLiteral  \"\\\"\\\\\\n\\r\\t\\x00\\x1b Ω\"") !=
+              std::string::npos,
+          "escape controls, preserve UTF-8 and support wide source positions");
+    check(output.str().find("2:1  StringLiteral  \"\"") != std::string::npos,
+          "empty string representation");
+    check(output.str().find('\x1b') == std::string::npos &&
+              output.str().find('\0') == std::string::npos,
+          "control bytes must not reach terminal output");
+
+    driver::Module absolute((std::filesystem::current_path() / "sample.optic").string());
+    output.str("");
+    lexer::Lexer::print_tokens(absolute, output);
+    check(output.str().starts_with("Tokens - sample.optic\n"), "relative display path");
+}
 } // namespace
 
 int main() {
     graph_checks();
     lexer_checks();
+    token_dump_checks();
 }
