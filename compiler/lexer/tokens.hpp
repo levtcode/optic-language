@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include <string>
 #include <cstddef>
+#include <string>
 
 namespace optic::compiler::lexer {
 
@@ -27,9 +27,12 @@ struct token_t {
     // Half-open byte range in the original source, independent of decoded value.
     std::size_t offset = 0;
     std::size_t end_offset = 0;
-    
-    token_t(const TokenType typ, const std::string &val, const unsigned ln, const unsigned col) : 
-    type(typ), value(val), line(ln), column(col) {}
+
+    token_t(const TokenType typ, const std::string& val, const unsigned ln, const unsigned col)
+        : type(typ),
+          value(val),
+          line(ln),
+          column(col) {}
 };
 
 } // namespace optic::compiler::lexer

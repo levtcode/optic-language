@@ -190,6 +190,9 @@ Building the project in public allows ideas, mistakes, and improvements to be do
 
 Feedback, discussion, and constructive criticism are always welcome.
 
+See [reading and formatting the C++ code](docs/code-style.md) for the style
+configuration, formatter commands and parser reading order.
+
 Areas of particular interest include:
 
 - Parsing techniques

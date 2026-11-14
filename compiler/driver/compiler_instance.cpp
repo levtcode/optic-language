@@ -6,11 +6,11 @@
  */
 
 #include "compiler/driver/compiler_instance.hpp"
+#include "compiler/ast/dump.hpp"
 #include "compiler/driver/args.hpp"
-#include "compiler/preprocessor/preprocessor.hpp"
 #include "compiler/lexer/lexer.hpp"
 #include "compiler/parser/parser.hpp"
-#include "compiler/ast/dump.hpp"
+#include "compiler/preprocessor/preprocessor.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -24,68 +24,43 @@ namespace optic::compiler::driver {
 
 void CompilerInstance::call_usage(bool help_manual) noexcept {
     (void)help_manual;
-    std::printf(
-        "Usage: opticc <build|run|debug> [options] <files.optic>\n\n"
-        "  build    Analyze sources; native code generation is not implemented.\n"
-        "  run      Analyze sources; bytecode generation/runtime are not implemented.\n"
-        "  debug    Print compiler configuration, dependencies and preprocessed tokens.\n\n"
-        "  --color-diagnostics=auto|enable|disable\n"
-        "  -Wall    Enable all warnings in diagnostic configuration.\n"
-        "  -g       Record the debug-information flag (backend pending).\n"
-        "  --       Treat remaining arguments as source filenames.\n"
-        "  --help, -h    Show this help.\n"
-        "  --version     Show compiler version.\n"
-    );
+    std::printf("Usage: opticc <build|run|debug> [options] <files.optic>\n\n"
+                "  build    Analyze sources; native code generation is not implemented.\n"
+                "  run      Analyze sources; bytecode generation/runtime are not implemented.\n"
+                "  debug    Print compiler configuration, dependencies and preprocessed tokens.\n\n"
+                "  --color-diagnostics=auto|enable|disable\n"
+                "  -Wall    Enable all warnings in diagnostic configuration.\n"
+                "  -g       Record the debug-information flag (backend pending).\n"
+                "  --       Treat remaining arguments as source filenames.\n"
+                "  --help, -h    Show this help.\n"
+                "  --version     Show compiler version.\n");
 
     /// if help_manual is enabled, opticc will show extended info. Not implemented yet
 }
 
-
 // %==========% Compiler Interface %==========%
 
-void CompilerInstance::set_mode(
-    const CompilerMode mode
-) {
+void CompilerInstance::set_mode(const CompilerMode mode) {
     compiler_context.config().mode = mode;
 }
 
-void CompilerInstance::add_file(
-    const std::string file
-) {
+void CompilerInstance::add_file(const std::string file) {
     auto& files = compiler_context.config().input_files;
 
-    if (std::find(
-        files.begin(),
-        files.end(),
-        file
-    ) == files.end()) {
+    if (std::find(files.begin(), files.end(), file) == files.end()) {
         files.push_back(file);
     }
 }
 
-void CompilerInstance::set_option(
-    const std::string option_name,
-    const ArgValue value
-) {
-    compiler_context.config().set_option(
-        option_name,
-        value
-    );
+void CompilerInstance::set_option(const std::string option_name, const ArgValue value) {
+    compiler_context.config().set_option(option_name, value);
 }
 
-void CompilerInstance::set_flag(
-    const std::string flag_name,
-    const bool val
-) {
-    compiler_context.config().set_flag(
-        flag_name,
-        val
-    );
+void CompilerInstance::set_flag(const std::string flag_name, const bool val) {
+    compiler_context.config().set_flag(flag_name, val);
 }
 
-int CompilerInstance::get_flag_value(
-    const std::string& flag_name
-) const {
+int CompilerInstance::get_flag_value(const std::string& flag_name) const {
     const auto& flags = compiler_context.config().flags;
     const auto it = flags.find(flag_name);
 
@@ -100,11 +75,8 @@ CompilerMode CompilerInstance::get_compiler_mode() const {
     return compiler_context.config().mode;
 }
 
-std::optional<ArgValue> CompilerInstance::get_option_value(
-    const std::string& option_name
-) const {
-    const ArgValue* value =
-        compiler_context.config().get_option(option_name);
+std::optional<ArgValue> CompilerInstance::get_option_value(const std::string& option_name) const {
+    const ArgValue* value = compiler_context.config().get_option(option_name);
 
     if (!value) {
         return std::nullopt;
@@ -113,7 +85,6 @@ std::optional<ArgValue> CompilerInstance::get_option_value(
     return *value;
 }
 
-
 // %==========% Compiler Phases %==========%
 
 /* */
@@ -121,13 +92,7 @@ void CompilerInstance::cli_tooling(int argc, char** argv) noexcept {
     auto& config = compiler_context.config();
     auto& diagnostics = compiler_context.diagnostics();
 
-    const SourceLocation srcloc(
-        SourceKind::Stdin,
-        "",
-        "",
-        0,
-        0
-    );
+    const SourceLocation srcloc(SourceKind::Stdin, "", "", 0, 0);
 
     std::string unknown_type;
     std::string unknown_name;
@@ -141,7 +106,8 @@ void CompilerInstance::cli_tooling(int argc, char** argv) noexcept {
             continue;
         }
         if (arg.empty()) {
-            diagnostics.report(srcloc, "Error: Empty compiler argument.\n", "", "", DiagnosticsLevel::Error);
+            diagnostics.report(
+                srcloc, "Error: Empty compiler argument.\n", "", "", DiagnosticsLevel::Error);
             continue;
         }
         if (files_only) {
@@ -150,8 +116,7 @@ void CompilerInstance::cli_tooling(int argc, char** argv) noexcept {
         }
         std::size_t index = std::string::npos;
 
-        const int match =
-            optic::compiler::driver::match_compiler_arg(arg, &index);
+        const int match = optic::compiler::driver::match_compiler_arg(arg, &index);
 
         // Source file.
         if (match == -1) {
@@ -161,23 +126,18 @@ void CompilerInstance::cli_tooling(int argc, char** argv) noexcept {
 
         // Option with a value.
         if (match == 1) {
-            const ArgValue value =
-                optic::compiler::driver::parse_value(arg, &index);
+            const ArgValue value = optic::compiler::driver::parse_value(arg, &index);
 
             if (index == std::string::npos) {
-                diagnostics.report(
-                    srcloc,
-                    "Error: Could not parse compiler option value.\n",
-                    "",
-                    "Supported value types: int, double, bool and string.\n",
-                    DiagnosticsLevel::Error
-                );
+                diagnostics.report(srcloc,
+                                   "Error: Could not parse compiler option value.\n",
+                                   "",
+                                   "Supported value types: int, double, bool and string.\n",
+                                   DiagnosticsLevel::Error);
                 continue;
             }
 
-            const std::string option_name(
-                arg.substr(0, index)
-            );
+            const std::string option_name(arg.substr(0, index));
 
             const auto it = config.options.find(option_name);
 
@@ -187,21 +147,14 @@ void CompilerInstance::cli_tooling(int argc, char** argv) noexcept {
                 break;
             }
 
-            if (!optic::compiler::driver::same_arg_type(
-                it->second,
-                value
-            )) {
+            if (!optic::compiler::driver::same_arg_type(it->second, value)) {
                 diagnostics.report(
                     srcloc,
-                    std::format(
-                        "Error: Type mismatch for option '{}'.\n",
-                        option_name
-                    ),
+                    std::format("Error: Type mismatch for option '{}'.\n", option_name),
                     "",
                     "The provided value does not match the "
                     "option's declared type.\n",
-                    DiagnosticsLevel::Error
-                );
+                    DiagnosticsLevel::Error);
 
                 continue;
             }
@@ -211,9 +164,7 @@ void CompilerInstance::cli_tooling(int argc, char** argv) noexcept {
         }
 
         // Compiler flag.
-        const std::string flag_name(
-            arg.substr(0, index)
-        );
+        const std::string flag_name(arg.substr(0, index));
 
         const auto it = config.flags.find(flag_name);
 
@@ -227,17 +178,11 @@ void CompilerInstance::cli_tooling(int argc, char** argv) noexcept {
     }
 
     if (!unknown_type.empty()) {
-        diagnostics.report(
-            srcloc,
-            std::format(
-                "Error: Unknown {} '{}'.\n",
-                unknown_type,
-                unknown_name
-            ),
-            "",
-            "",
-            DiagnosticsLevel::Error
-        );
+        diagnostics.report(srcloc,
+                           std::format("Error: Unknown {} '{}'.\n", unknown_type, unknown_name),
+                           "",
+                           "",
+                           DiagnosticsLevel::Error);
 
         call_usage();
     }
@@ -262,9 +207,12 @@ void CompilerInstance::preprocess() noexcept {
             }
         }
     } catch (const std::exception& exception) {
-        compiler_context.diagnostics().report({},
+        compiler_context.diagnostics().report(
+            {},
             std::string("Error: Frontend preprocessing failed: ") + exception.what(),
-            "", "", DiagnosticsLevel::Error);
+            "",
+            "",
+            DiagnosticsLevel::Error);
     }
 }
 
@@ -276,7 +224,9 @@ void CompilerInstance::parsing() noexcept {
         auto& modules = compiler_context.modules();
         for (const auto id : modules.compilation_order()) {
             const auto& module = *modules.get_module(id);
-            if (module.state() != ModuleState::Ready) continue;
+            if (module.state() != ModuleState::Ready) {
+                continue;
+            }
             parser::Parser parser(id, module, compiler_context.diagnostics());
             if (auto tree = parser.parse()) {
                 if (compiler_context.config().mode == CompilerMode::Debug) {
@@ -288,7 +238,11 @@ void CompilerInstance::parsing() noexcept {
         }
     } catch (const std::exception& exception) {
         compiler_context.diagnostics().report({},
-            std::string("Error: Parsing failed: ") + exception.what(), "", "", DiagnosticsLevel::Error);
+                                              std::string("Error: Parsing failed: ") +
+                                                  exception.what(),
+                                              "",
+                                              "",
+                                              DiagnosticsLevel::Error);
     }
 }
 
@@ -312,27 +266,28 @@ void CompilerInstance::code_generation() noexcept {
     // TODO
 }
 
-
 /* */
 [[noreturn]]
 void CompilerInstance::stop(bool generate_core_dump) noexcept {
     compiler_context.diagnostics().show_all();
-    if (generate_core_dump)
+    if (generate_core_dump) {
         abort();
-    else
+    } else {
         exit(1);
+    }
 }
 
 /* */
 [[nodiscard]]
-int CompilerInstance::run(int argc, char *argv[], CompilerMode mode) noexcept {
+int CompilerInstance::run(int argc, char* argv[], CompilerMode mode) noexcept {
     auto& diagnostics = compiler_context.diagnostics();
 
     set_mode(mode);
 
     cli_tooling(argc, argv);
     if (compiler_context.config().input_files.empty()) {
-        diagnostics.report(SourceLocation{}, "Error: No input files.\n", "", "", DiagnosticsLevel::Error);
+        diagnostics.report(
+            SourceLocation{}, "Error: No input files.\n", "", "", DiagnosticsLevel::Error);
     }
     if (diagnostics.has_errors()) {
         diagnostics.show_all();
@@ -340,7 +295,8 @@ int CompilerInstance::run(int argc, char *argv[], CompilerMode mode) noexcept {
     }
     auto diagnostic_config = diagnostics.get_config();
     diagnostic_config.all_warnings = compiler_context.config().has_flag("-Wall");
-    const auto color = std::get<std::string>(compiler_context.config().options.at("--color-diagnostics"));
+    const auto color =
+        std::get<std::string>(compiler_context.config().options.at("--color-diagnostics"));
     if (color != "auto" && color != "enable" && color != "disable") {
         std::fprintf(stderr, "opticc: --color-diagnostics expects auto, enable or disable.\n");
         return EXIT_FAILURE;
@@ -351,11 +307,21 @@ int CompilerInstance::run(int argc, char *argv[], CompilerMode mode) noexcept {
         optic::compiler::driver::print_args(compiler_context.config());
     }
     preprocess();
-    if (!diagnostics.has_errors()) parsing();
-    if (!diagnostics.has_errors()) semantic_analize();
-    if (!diagnostics.has_errors()) optimize();
-    if (!diagnostics.has_errors()) code_generation();
-    if (!diagnostics.has_errors()) linking();
+    if (!diagnostics.has_errors()) {
+        parsing();
+    }
+    if (!diagnostics.has_errors()) {
+        semantic_analize();
+    }
+    if (!diagnostics.has_errors()) {
+        optimize();
+    }
+    if (!diagnostics.has_errors()) {
+        code_generation();
+    }
+    if (!diagnostics.has_errors()) {
+        linking();
+    }
 
     if (diagnostics.get_config().guide_engine) {
         diagnostics.run_guide_engine();
@@ -363,11 +329,15 @@ int CompilerInstance::run(int argc, char *argv[], CompilerMode mode) noexcept {
         diagnostics.show_all();
     }
 
-    if (diagnostics.has_errors()) return EXIT_FAILURE;
+    if (diagnostics.has_errors()) {
+        return EXIT_FAILURE;
+    }
     if (mode != CompilerMode::Debug) {
         std::fprintf(stderr,
-            "opticc: %s is not implemented; frontend analysis completed, but no artifact was generated.\n",
-            mode == CompilerMode::Run ? "bytecode generation and execution" : "native code generation");
+                     "opticc: %s is not implemented; frontend analysis completed, but no artifact "
+                     "was generated.\n",
+                     mode == CompilerMode::Run ? "bytecode generation and execution"
+                                               : "native code generation");
         return EXIT_FAILURE;
     }
     return EXIT_SUCCESS;

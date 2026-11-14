@@ -18,7 +18,12 @@ void Lexer::tokenize_layout(std::vector<token_t>& tokens) {
         if (newline != std::string_view::npos) {
             const auto offset = previous_end + newline;
             while (scanned < offset) {
-                if (source[scanned++] == '\n') { ++line; column = 1; } else ++column;
+                if (source[scanned++] == '\n') {
+                    ++line;
+                    column = 1;
+                } else {
+                    ++column;
+                }
             }
             tokens.emplace_back(TokenType::Newline, "", line, column);
             tokens.back().offset = offset;
@@ -28,4 +33,4 @@ void Lexer::tokenize_layout(std::vector<token_t>& tokens) {
         previous_end = token.end_offset;
     }
 }
-}
+} // namespace optic::compiler::lexer
