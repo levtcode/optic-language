@@ -13,8 +13,12 @@ int main(int argc, char* argv[]) {
     std::cout.flush();
     std::cerr << "component stderr\n";
 #ifndef _WIN32
-    if (std::getenv("OPTIC_TEST_SIGNAL")) std::raise(SIGTERM);
+    if (std::getenv("OPTIC_TEST_SIGNAL")) {
+        std::raise(SIGTERM);
+    }
 #endif
-    if (const char* status = std::getenv("OPTIC_TEST_EXIT")) return std::atoi(status);
+    if (const char* status = std::getenv("OPTIC_TEST_EXIT")) {
+        return std::atoi(status);
+    }
     return 0;
 }

@@ -7,14 +7,14 @@
 
 #pragma once
 
+#include "compiler/ast/ast.hpp"
 #include "compiler/driver/diagnostics_engine.hpp"
 #include "compiler/driver/module.hpp"
-#include "compiler/ast/ast.hpp"
 
+#include <cstdint>
 #include <filesystem>
 #include <map>
 #include <memory>
-#include <cstdint>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -23,17 +23,12 @@
 
 namespace optic::compiler::driver {
 
-using ArgValue = std::variant<
-    bool,
-    int,
-    double,
-    std::string
->;
+using ArgValue = std::variant<bool, int, double, std::string>;
 
 enum class CompilerMode {
-    Build,  // Request a native artifact (backend pending)
-    Run,    // Request bytecode execution (backend/runtime pending)
-    Debug   // Inspect configuration and preprocessed tokens; no debugger
+    Build, // Request a native artifact (backend pending)
+    Run,   // Request bytecode execution (backend/runtime pending)
+    Debug  // Inspect configuration and preprocessed tokens; no debugger
 };
 
 /* */
@@ -43,19 +38,18 @@ struct TargetMachineInfo {
 
 struct CompilerConfig {
     CompilerMode mode = CompilerMode::Build;
-    std::vector<std::string> input_files;   // probably delete this to optimize memory
+    std::vector<std::string> input_files; // probably delete this to optimize memory
 
     std::unordered_map<std::string, ArgValue> options = {
-        {"--color-diagnostics", "auto"},    // [auto, enable, disable] default=auto
+        {"--color-diagnostics", "auto"}, // [auto, enable, disable] default=auto
         // more options soon
     };
 
     std::unordered_map<std::string, bool> flags = {
         {"-Wall", false},
-        {"-g",    false},
+        {"-g", false},
         // more flags soon
     };
-
 
     [[nodiscard]]
     bool has_flag(const std::string& name) const noexcept {
@@ -84,20 +78,15 @@ struct CompilerConfig {
     }
 };
 
-
 class CompilerContext {
 public:
     CompilerContext() = default;
 
     CompilerContext(const CompilerContext&) = delete;
-    CompilerContext& operator=(
-        const CompilerContext&
-    ) = delete;
+    CompilerContext& operator=(const CompilerContext&) = delete;
 
     CompilerContext(CompilerContext&&) = delete;
-    CompilerContext& operator=(
-        CompilerContext&&
-    ) = delete;
+    CompilerContext& operator=(CompilerContext&&) = delete;
 
     [[nodiscard]]
     CompilerConfig& config() noexcept {
@@ -128,14 +117,15 @@ public:
     std::map<ModuleID, std::unique_ptr<ast::ModuleAST>>& syntax_trees() noexcept {
         return module_asts;
     }
+
     const std::map<ModuleID, std::unique_ptr<ast::ModuleAST>>& syntax_trees() const noexcept {
         return module_asts;
     }
 
 private:
-    CompilerConfig    compiler_config;
+    CompilerConfig compiler_config;
     DiagnosticsEngine diagnostics_engine;
-    ModuleGraph       module_graph;
+    ModuleGraph module_graph;
     TargetMachineInfo target_info;
     std::map<ModuleID, std::unique_ptr<ast::ModuleAST>> module_asts;
 };
@@ -143,36 +133,32 @@ private:
 /* */
 class CompilerInstance {
 private:
-    void cli_tooling(
-        int argc,
-        char **argv)        noexcept;
-    void preprocess()       noexcept;
-    void parsing()          noexcept;
+    void cli_tooling(int argc, char** argv) noexcept;
+    void preprocess() noexcept;
+    void parsing() noexcept;
     void semantic_analize() noexcept;
-    void optimize()         noexcept;
-    void linking()          noexcept;
-    void code_generation()  noexcept;
+    void optimize() noexcept;
+    void linking() noexcept;
+    void code_generation() noexcept;
 
-    CompilerContext     compiler_context;
+    CompilerContext compiler_context;
 
 public:
     /// Analyze argc compiler arguments. argv excludes the program name and mode.
     /// Debug succeeds after frontend inspection; Build/Run fail until a backend exists.
-    [[nodiscard]] int run(int argc, char **argv, CompilerMode) noexcept;
-    [[noreturn]]  void stop(bool core_dump=false) noexcept;
+    [[nodiscard]] int run(int argc, char** argv, CompilerMode) noexcept;
+    [[noreturn]] void stop(bool core_dump = false) noexcept;
 
-    static void call_usage(bool help_manual=false) noexcept;
+    static void call_usage(bool help_manual = false) noexcept;
 
-    void set_mode  (const CompilerMode mode);
-    void add_file  (const std::string file);
+    void set_mode(const CompilerMode mode);
+    void add_file(const std::string file);
     void set_option(const std::string option_name, const ArgValue val);
-    void set_flag  (const std::string flag_name, const bool val);
+    void set_flag(const std::string flag_name, const bool val);
 
     int get_flag_value(const std::string& flag_name) const;
     CompilerMode get_compiler_mode() const;
-    std::optional<ArgValue> get_option_value(
-        const std::string& option_name
-    ) const;
+    std::optional<ArgValue> get_option_value(const std::string& option_name) const;
 };
 
 } // namespace optic::compiler::driver

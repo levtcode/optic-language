@@ -8,8 +8,8 @@
 
 #include <cstdint>
 #include <filesystem>
-#include <map>
 #include <iosfwd>
+#include <map>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -23,7 +23,7 @@ inline constexpr std::string_view OPTIC_EXTENSION = ".optic";
 
 struct ImportBinding {
     ModuleID target;
-    std::string name; // Written dotted name or path, without rewriting namespace visibility.
+    std::string name;  // Written dotted name or path, without rewriting namespace visibility.
     std::string alias; // Empty when no explicit `as` binding was requested.
     unsigned line, column;
 };
@@ -37,17 +37,49 @@ public:
     Module(const Module&) = delete;
     Module& operator=(const Module&) = delete;
 
-    std::string get_path() const { return path.generic_string(); }
-    std::string_view get_buffer() const noexcept { return buffer; }
-    std::vector<lexer::token_t>& get_tokens() noexcept { return tokens; }
-    const std::vector<lexer::token_t>& get_tokens() const noexcept { return tokens; }
-    const std::vector<ModuleID>& get_dependencies() const noexcept { return dependencies; }
-    const std::vector<ImportBinding>& get_imports() const noexcept { return imports; }
-    void clear_imports() { imports.clear(); }
-    void record_import(ImportBinding binding) { imports.push_back(std::move(binding)); }
-    void set_buffer(std::string value) { buffer = std::move(value); }
-    ModuleState state() const noexcept { return processing_state; }
-    void set_state(ModuleState value) noexcept { processing_state = value; }
+    std::string get_path() const {
+        return path.generic_string();
+    }
+
+    std::string_view get_buffer() const noexcept {
+        return buffer;
+    }
+
+    std::vector<lexer::token_t>& get_tokens() noexcept {
+        return tokens;
+    }
+
+    const std::vector<lexer::token_t>& get_tokens() const noexcept {
+        return tokens;
+    }
+
+    const std::vector<ModuleID>& get_dependencies() const noexcept {
+        return dependencies;
+    }
+
+    const std::vector<ImportBinding>& get_imports() const noexcept {
+        return imports;
+    }
+
+    void clear_imports() {
+        imports.clear();
+    }
+
+    void record_import(ImportBinding binding) {
+        imports.push_back(std::move(binding));
+    }
+
+    void set_buffer(std::string value) {
+        buffer = std::move(value);
+    }
+
+    ModuleState state() const noexcept {
+        return processing_state;
+    }
+
+    void set_state(ModuleState value) noexcept {
+        processing_state = value;
+    }
 
 private:
     friend class ModuleGraph;
@@ -71,8 +103,15 @@ public:
     bool add_dependency(ModuleID module, ModuleID dependency);
     /// Rebuild dependency-first order. On failure the order is empty.
     bool topological_sort();
-    const std::vector<ModuleID>& compilation_order() const noexcept { return ordered_modules; }
-    std::size_t size() const noexcept { return modules.size(); }
+
+    const std::vector<ModuleID>& compilation_order() const noexcept {
+        return ordered_modules;
+    }
+
+    std::size_t size() const noexcept {
+        return modules.size();
+    }
+
     void print(std::ostream& out) const;
 
 private:

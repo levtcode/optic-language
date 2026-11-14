@@ -19,8 +19,8 @@ void print_args_options(std::unordered_map<std::string, ArgValue>&);
 void print_args_flags(std::unordered_map<std::string, bool>&);
 void print_args(CompilerConfig&);
 
-ArgValue parse_value(const std::string_view &option_name, size_t *index);
-int match_compiler_arg(const std::string_view &arg, size_t *index);
+ArgValue parse_value(const std::string_view& option_name, size_t* index);
+int match_compiler_arg(const std::string_view& arg, size_t* index);
 bool same_arg_type(const ArgValue& a, const ArgValue& b);
 
 } // namespace optic::compiler::driver

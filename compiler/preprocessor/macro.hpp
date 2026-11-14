@@ -6,8 +6,8 @@
 #include "compiler/driver/diagnostics_engine.hpp"
 #include "compiler/lexer/tokens.hpp"
 
-#include <memory>
 #include <iosfwd>
+#include <memory>
 #include <stdexcept>
 #include <vector>
 
@@ -15,8 +15,10 @@ namespace optic::compiler::preprocessor {
 class MacroError : public std::runtime_error {
 public:
     driver::SourceLocation location;
+
     MacroError(driver::SourceLocation location, const std::string& message)
-        : std::runtime_error(message), location(std::move(location)) {}
+        : std::runtime_error(message),
+          location(std::move(location)) {}
 };
 
 /// Definitions are immutable; values and expressions are copied at import boundaries.
@@ -32,12 +34,13 @@ public:
 
     void print(std::ostream& out) const;
     bool contains(const std::string& name) const;
-    void define(const std::vector<lexer::token_t>& input, std::size_t& cursor,
-                const std::string& file);
+    void
+    define(const std::vector<lexer::token_t>& input, std::size_t& cursor, const std::string& file);
     void import(const MacroEnvironment& dependency, const driver::SourceLocation& location);
     /// cursor points at a known macro name, and advances past the complete invocation.
-    std::vector<lexer::token_t> expand(const std::vector<lexer::token_t>& input,
-                                    std::size_t& cursor, const std::string& file);
+    std::vector<lexer::token_t>
+    expand(const std::vector<lexer::token_t>& input, std::size_t& cursor, const std::string& file);
+
 private:
     struct Impl;
     std::unique_ptr<Impl> impl;

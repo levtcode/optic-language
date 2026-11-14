@@ -13,17 +13,16 @@
 namespace optic::cli {
 
 void CliTool::print_usage() {
-    std::cout
-        << "Usage: optic <command> [arguments]\n\n"
-        << "  help, --help     Show this help\n"
-        << "  --version        Show the toolchain version\n"
-        << "  build <files>    Delegate compilation to opticc (code generation pending)\n"
-        << "  run <files>      Delegate to opticc (execution pending)\n"
-        << "  debug <files>    Dump compiler configuration and tokens; not a debugger\n"
-        << "  install          Package installation (not implemented)\n"
-        << "  uninstall        Package removal (not implemented)\n"
-        << "  test             Toolchain test command (not implemented)\n\n"
-        << "Use optic <build|run|debug> --help for compiler options.\n";
+    std::cout << "Usage: optic <command> [arguments]\n\n"
+              << "  help, --help     Show this help\n"
+              << "  --version        Show the toolchain version\n"
+              << "  build <files>    Delegate compilation to opticc (code generation pending)\n"
+              << "  run <files>      Delegate to opticc (execution pending)\n"
+              << "  debug <files>    Dump compiler configuration and tokens; not a debugger\n"
+              << "  install          Package installation (not implemented)\n"
+              << "  uninstall        Package removal (not implemented)\n"
+              << "  test             Toolchain test command (not implemented)\n\n"
+              << "Use optic <build|run|debug> --help for compiler options.\n";
 }
 
 int CliTool::run(int argc, char* argv[]) const {
@@ -41,7 +40,9 @@ int CliTool::run(int argc, char* argv[]) const {
         return 0;
     }
     if (command == "--version") {
-        if (argc != 2) return 2;
+        if (argc != 2) {
+            return 2;
+        }
         std::cout << "optic " << OPTIC_VERSION << '\n';
         return 0;
     }
@@ -54,7 +55,9 @@ int CliTool::run(int argc, char* argv[]) const {
         return 2;
     }
     std::vector<std::string> arguments;
-    for (int i = 1; i < argc; ++i) arguments.emplace_back(argv[i]);
+    for (int i = 1; i < argc; ++i) {
+        arguments.emplace_back(argv[i]);
+    }
     return run_process(compiler_executable(argv[0]), arguments);
 }
 

@@ -12,7 +12,9 @@ namespace optic::compiler::lexer {
 class Lexer {
 public:
     Lexer(driver::Module& mod, driver::DiagnosticsEngine& diagnostics)
-        : module(mod), diagnostic_engine(diagnostics) {}
+        : module(mod),
+          diagnostic_engine(diagnostics) {}
+
     void tokenize(std::vector<token_t>& tokens);
     /// Parser stream, including physical newline boundaries; indentation has no syntax.
     void tokenize_layout(std::vector<token_t>& tokens);
@@ -32,5 +34,6 @@ private:
     void ignore_comment();
     void error(const driver::SourceLocation& loc, const std::string& message);
 };
+
 const char* to_string_token(TokenType type);
 } // namespace optic::compiler::lexer

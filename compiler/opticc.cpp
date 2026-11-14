@@ -12,7 +12,6 @@
 
 constexpr int CLI_INVOCATION_FAILURE = 2;
 
-
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         optic::compiler::driver::CompilerInstance::call_usage();
@@ -28,10 +27,13 @@ int main(int argc, char* argv[]) {
         return argc == 2 ? EXIT_SUCCESS : CLI_INVOCATION_FAILURE;
     }
     optic::compiler::driver::CompilerMode mode;
-    if (command == "build") mode = optic::compiler::driver::CompilerMode::Build;
-    else if (command == "run") mode = optic::compiler::driver::CompilerMode::Run;
-    else if (command == "debug") mode = optic::compiler::driver::CompilerMode::Debug;
-    else {
+    if (command == "build") {
+        mode = optic::compiler::driver::CompilerMode::Build;
+    } else if (command == "run") {
+        mode = optic::compiler::driver::CompilerMode::Run;
+    } else if (command == "debug") {
+        mode = optic::compiler::driver::CompilerMode::Debug;
+    } else {
         std::cerr << "opticc: unknown mode '" << command << "'.\n";
         return CLI_INVOCATION_FAILURE;
     }
@@ -39,9 +41,10 @@ int main(int argc, char* argv[]) {
         optic::compiler::driver::CompilerInstance::call_usage();
         return EXIT_SUCCESS;
     }
-    if (mode == optic::compiler::driver::CompilerMode::Debug)
+    if (mode == optic::compiler::driver::CompilerMode::Debug) {
         std::cout << "[opticc] Executable: " << argv[0] << "\n[opticc] Version: " << OPTIC_VERSION
                   << "\n[opticc] Mode: debug\n";
+    }
     optic::compiler::driver::CompilerInstance compiler;
     // run() receives compiler arguments only: neither executable name nor mode.
     return compiler.run(argc - 2, argv + 2, mode);
