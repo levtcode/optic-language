@@ -30,6 +30,7 @@ int CliTool::run(int argc, char* argv[]) const {
         print_usage();
         return 2;
     }
+
     const std::string_view command(argv[1]);
     if (command == "help" || command == "--help" || command == "-h") {
         if (argc != 2) {
@@ -39,6 +40,7 @@ int CliTool::run(int argc, char* argv[]) const {
         print_usage();
         return 0;
     }
+
     if (command == "--version") {
         if (argc != 2) {
             return 2;
@@ -46,18 +48,22 @@ int CliTool::run(int argc, char* argv[]) const {
         std::cout << "optic " << OPTIC_VERSION << '\n';
         return 0;
     }
+
     if (command == "install" || command == "uninstall" || command == "test") {
         std::cerr << "optic: command '" << command << "' is not implemented.\n";
         return 1;
     }
+
     if (command != "build" && command != "run" && command != "debug") {
         std::cerr << "optic: unknown command '" << command << "'. See optic --help.\n";
         return 2;
     }
+
     std::vector<std::string> arguments;
     for (int i = 1; i < argc; ++i) {
         arguments.emplace_back(argv[i]);
     }
+
     return run_process(compiler_executable(argv[0]), arguments);
 }
 

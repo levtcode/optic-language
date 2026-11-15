@@ -12,7 +12,6 @@
 
 namespace optic::compiler::driver {
 
-/* */
 const char* Diagnostic::severity_to_string(const DiagnosticsLevel level) {
     switch (level) {
         case DiagnosticsLevel::Hint:
@@ -26,10 +25,10 @@ const char* Diagnostic::severity_to_string(const DiagnosticsLevel level) {
         case DiagnosticsLevel::InternalError:
             return "InternalError";
     }
+
     return "Unknown";
 }
 
-/* */
 void DiagnosticsEngine::print_info(const Diagnostic& diag, const SourceKind& src_kind) noexcept {
     if (src_kind == SourceKind::Stdin) {
         std::cerr << std::format("From <stdin>:\n"
@@ -59,7 +58,6 @@ void DiagnosticsEngine::print_info(const Diagnostic& diag, const SourceKind& src
                              diag.loc.file);
 }
 
-/* */
 std::string DiagnosticsEngine::format_msg(const std::string& msg,
                                           const std::string& buffer_view,
                                           const unsigned line,
@@ -83,7 +81,6 @@ std::string DiagnosticsEngine::format_msg(const std::string& msg,
                        padding);
 }
 
-/* */
 void DiagnosticsEngine::report(const SourceLocation& loc,
                                const std::string& message,
                                const std::string& solution,
@@ -100,21 +97,18 @@ void DiagnosticsEngine::report(const SourceLocation& loc,
     }
 }
 
-/* */
 void DiagnosticsEngine::show() noexcept {
     auto& diag = diagnostics[__actual_diag];
     print_info(diag, diag.loc.source_kind);
     __actual_diag++;
 }
 
-/* */
 void DiagnosticsEngine::show_all() noexcept {
     for (auto& diag : diagnostics) {
         print_info(diag, diag.loc.source_kind);
     }
 }
 
-/* */
 void DiagnosticsEngine::show_guide_engine_menu() noexcept {
     int user_option;
 
@@ -147,6 +141,7 @@ void DiagnosticsEngine::show_guide_engine_menu() noexcept {
                 std::cout << "There is no solution available to display.\n";
                 break;
             }
+
             std::cout << diagnostics[__actual_diag].solution;
             break;
         }
@@ -155,6 +150,7 @@ void DiagnosticsEngine::show_guide_engine_menu() noexcept {
                 std::cout << "There is no more information available to display.\n";
                 break;
             }
+
             std::cout << diagnostics[__actual_diag].more_info;
             break;
         }
@@ -166,7 +162,6 @@ void DiagnosticsEngine::show_guide_engine_menu() noexcept {
     }
 }
 
-/* */
 void DiagnosticsEngine::run_guide_engine() noexcept {
     // MUCH LATER: Run the guide engine in a dedicated GUI or use specific graphics to show the
     // diagnostics.

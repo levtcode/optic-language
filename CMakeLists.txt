@@ -38,6 +38,7 @@ add_library(optic_frontend STATIC
     compiler/parser/strings.cpp
     compiler/ast/dump.cpp
     compiler/preprocessor/preprocessor.cpp
+    compiler/preprocessor/imports.cpp
 )
 optic_configure_target(optic_frontend)
 add_executable(opticc compiler/opticc.cpp compiler/driver/args.cpp

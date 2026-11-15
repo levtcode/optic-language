@@ -42,8 +42,10 @@ struct TypeRef : Node {
     std::string name;
     std::vector<TypeRef> arguments;
     std::vector<TypeRef> alternatives;
+
     // Non-type argument, e.g. array extent. Names stay unresolved.
     std::shared_ptr<const Expr> value_argument;
+
     unsigned pointers = 0;
     bool reference = false;
     bool constant = false;

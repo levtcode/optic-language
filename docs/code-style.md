@@ -6,6 +6,24 @@ functions and node definitions are separated with blank lines. `.editorconfig`
 sets editor defaults and `.clang-format` makes the C++ layout reproducible.
 Use clang-format 23.1.5 for the same output as this revision.
 
+## Spacing inside functions
+
+Use one blank line between logical steps: preparing input, validating it,
+consuming a grammar element, updating state and returning a result. Keep closely
+related operations together, such as reading a token and advancing its cursor.
+Do not insert a blank line after every statement or every brace.
+
+Early-return checks may be separated when each handles a distinct condition.
+Keep paired operations, such as entering/leaving a delimiter scope, visually
+together. The goal is to expose the function's steps rather than increase its
+line count. `TokenCursor` is a compact example of this balance.
+
+When a function combines different responsibilities, extract named operations
+before adding more spacing. The preprocessor's `process` coordinates module
+state, tokenization and filtering; `imports.cpp` handles import syntax and
+dependency resolution. Formatting tools preserve this grouping, but cannot
+choose the logical boundaries for the author.
+
 From the repository root, format tracked C++ files with:
 
 ```sh

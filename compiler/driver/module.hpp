@@ -99,8 +99,10 @@ public:
     ModuleID find_module(const std::filesystem::path& path) const;
     Module* get_module(ModuleID id) noexcept;
     const Module* get_module(ModuleID id) const noexcept;
+
     /// Reject invalid IDs and cycles without modifying the graph. Duplicate edges are harmless.
     bool add_dependency(ModuleID module, ModuleID dependency);
+
     /// Rebuild dependency-first order. On failure the order is empty.
     bool topological_sort();
 

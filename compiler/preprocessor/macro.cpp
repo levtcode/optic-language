@@ -37,6 +37,7 @@ struct Character {
     std::string text;
     bool operator==(const Character&) const = default;
 };
+
 struct Value;
 using Array = std::vector<Value>;
 using Object = std::map<std::string, Value>;
@@ -54,6 +55,7 @@ struct Value : std::variant<std::monostate,
     using variant::operator=;
     bool operator==(const Value&) const = default;
 };
+
 enum class Type { Null, Int, Float, Bool, String, Char, Void, Array, Object };
 
 struct TypeSpec {
@@ -61,6 +63,7 @@ struct TypeSpec {
     bool nullable = false;
     bool operator==(const TypeSpec&) const = default;
 };
+
 struct Expr;
 using Expression = std::shared_ptr<const Expr>;
 
@@ -143,8 +146,10 @@ bool scalar_character(const std::string& value) {
     if (value.empty()) {
         return false;
     }
+
     const auto lead = static_cast<unsigned char>(value[0]);
     unsigned count = 1, code = lead;
+
     if (lead >= 0xc2 && lead <= 0xdf) {
         count = 2;
         code = lead & 0x1f;
@@ -157,26 +162,32 @@ bool scalar_character(const std::string& value) {
     } else if (lead >= 0x80) {
         return false;
     }
+
     if (value.size() != count) {
         return false;
     }
+
     for (unsigned i = 1; i < count; ++i) {
         const auto c = static_cast<unsigned char>(value[i]);
+
         if ((c & 0xc0) != 0x80) {
             return false;
         }
         code = (code << 6) | (c & 0x3f);
     }
+
     if ((count == 2 && code < 0x80) || (count == 3 && code < 0x800) ||
         (count == 4 && code < 0x10000)) {
         return false;
     }
+
     return code <= 0x10ffff && !(code >= 0xd800 && code <= 0xdfff);
 }
 
 std::string quote(const std::string& text, char delimiter = '"') {
     constexpr char digits[] = "0123456789abcdef";
     std::string out(1, delimiter);
+
     for (const unsigned char c : text) {
         if (c == '\\' || c == delimiter) {
             out += '\\';
@@ -203,30 +214,40 @@ std::string text(const Value& value, bool source = false) {
     if (std::holds_alternative<std::monostate>(value)) {
         return "null";
     }
+
     if (const auto* n = std::get_if<std::int64_t>(&value)) {
         return std::to_string(*n);
     }
+
     if (const auto* n = std::get_if<double>(&value)) {
         char buffer[128];
         const auto [end, error] = std::to_chars(buffer, buffer + sizeof(buffer), *n);
+
         if (error != std::errc{}) {
             throw std::runtime_error("Cannot format macro float");
         }
+
         std::string result(buffer, end);
+
         if (source && result.find_first_of(".eE") == std::string::npos) {
             result += ".0";
         }
+
         return result;
     }
+
     if (const auto* b = std::get_if<bool>(&value)) {
         return *b ? "true" : "false";
     }
+
     if (const auto* s = std::get_if<std::string>(&value)) {
         return source ? quote(*s) : *s;
     }
+
     if (std::holds_alternative<VoidValue>(value)) {
         throw std::runtime_error("void has no scalar representation");
     }
+
     if (std::holds_alternative<Array>(value) || std::holds_alternative<Object>(value)) {
         std::string result = std::holds_alternative<Array>(value) ? "[" : "{";
         auto add = [&](const std::string& part) {
@@ -236,6 +257,7 @@ std::string text(const Value& value, bool source = false) {
             result += part;
         };
         bool first = true;
+
         if (const auto* array = std::get_if<Array>(&value)) {
             for (const auto& item : *array) {
                 if (!first) {
@@ -256,6 +278,7 @@ std::string text(const Value& value, bool source = false) {
         add(std::holds_alternative<Array>(value) ? "]" : "}");
         return result;
     }
+
     const auto& c = std::get<Character>(value).text;
     return source ? quote(c, '\'') : c;
 }
@@ -269,12 +292,14 @@ std::vector<Token> lex_fragment(const std::string& source, const Location& invoc
     driver::DiagnosticsEngine diagnostics;
     std::vector<Token> tokens;
     lexer::Lexer(module, diagnostics).tokenize(tokens);
+
     if (diagnostics.has_errors()) {
         const auto& first = diagnostics.entries().front();
         throw MacroError(invocation,
                          "Invalid macro source at generated line " +
                              std::to_string(first.loc.line) + ": " + first.msg);
     }
+
     return tokens;
 }
 
@@ -306,9 +331,11 @@ public:
         for (const auto& child : expr.children) {
             expr.height = std::max(expr.height, child->height + 1);
         }
+
         if (expr.height > 128) {
             fail(file, expr.token, "Macro expression tree exceeds 128 levels.");
         }
+
         return std::make_shared<Expr>(std::move(expr));
     }
 
@@ -323,6 +350,7 @@ public:
 
     Token take() {
         const auto token = peek();
+
         if (token.type == Kind::EndOfFile) {
             fail(file, token, "Unexpected EOF in macro.");
         }
@@ -342,6 +370,7 @@ public:
         if (peek().type != kind) {
             fail(file, peek(), message);
         }
+
         return take();
     }
 
@@ -350,6 +379,7 @@ public:
             peek().type == Kind::EndOfFile) {
             return;
         }
+
         if (cursor && peek().line > tokens[cursor - 1].line) {
             return;
         }
@@ -360,40 +390,52 @@ public:
         if (token.type == Kind::Int) {
             return Type::Int;
         }
+
         if (token.type == Kind::Float) {
             return Type::Float;
         }
+
         if (token.type == Kind::Bool) {
             return Type::Bool;
         }
+
         if (token.type == Kind::String) {
             return Type::String;
         }
+
         if (token.type == Kind::Char) {
             return Type::Char;
         }
+
         if (token.type == Kind::Array) {
             return Type::Array;
         }
+
         if (token.type == Kind::Identifier && token.value == "object") {
             return Type::Object;
         }
+
         if (token.type == Kind::Identifier && token.value == "void") {
             return Type::Void;
         }
+
         return std::nullopt;
     }
 
     TypeSpec type_spec(bool allow_void = false) {
         const auto token = take();
         const auto kind = type(token);
+
         if (!kind || (*kind == Type::Void && !allow_void)) {
             fail(file, token, "Expected an explicit macro type.");
         }
+
         const bool nullable = accept(Kind::TernaryOp);
+
         if (*kind == Type::Void && nullable) {
             fail(file, token, "void cannot be nullable.");
         }
+
         return {*kind, nullable};
     }
 
@@ -439,32 +481,38 @@ public:
     Expression expression(int minimum = 1) {
         Nesting guard(depth, file, peek());
         auto left = unary();
+
         while (const auto level = precedence(peek().type)) {
             if (level < minimum) {
                 break;
             }
+
             const auto op = take();
             auto right = expression(level + (op.type == Kind::Pow ? 0 : 1));
             left = make_node(Expr{Expr::Form::Binary, op, {}, "", {left, right}});
         }
+
         return left;
     }
 
     std::vector<Expression> arguments() {
         expect(Kind::LeftParen, "Expected '(' in macro call.");
         std::vector<Expression> result;
+
         if (!accept(Kind::RightParen)) {
             do {
                 result.push_back(expression());
             } while (accept(Kind::Comma));
             expect(Kind::RightParen, "Expected ')' after macro arguments.");
         }
+
         return result;
     }
 
     Expression unary() {
         Nesting guard(depth, file, peek());
         const auto token = take();
+
         if (token.type == Kind::Plus || token.type == Kind::Minus || token.type == Kind::Not ||
             token.type == Kind::Not_C || token.type == Kind::BitNot) {
             if (token.type == Kind::Minus && peek().type == Kind::IntegerLiteral &&
@@ -473,14 +521,17 @@ public:
                 return make_node(Expr{
                     Expr::Form::Literal, token, std::numeric_limits<std::int64_t>::min(), "", {}});
             }
+
             return make_node(Expr{Expr::Form::Unary, token, {}, "", {unary()}});
         }
+
         if (token.type == Kind::LeftParen) {
             auto value = expression();
             expect(Kind::RightParen, "Expected ')' in macro expression.");
             return postfix(value);
         }
         Expr result{Expr::Form::Literal, token, {}, "", {}};
+
         if (token.type == Kind::IntegerLiteral) {
             std::int64_t value = 0;
             const auto [end, error] =
@@ -488,6 +539,7 @@ public:
             if (error != std::errc{} || end != token.value.data() + token.value.size()) {
                 fail(file, token, "Macro integer is outside the signed 64-bit range.");
             }
+
             result.value = value;
         } else if (token.type == Kind::FloatLiteral) {
             double value = 0;
@@ -497,6 +549,7 @@ public:
                 !std::isfinite(value)) {
                 fail(file, token, "Macro float must be finite and representable.");
             }
+
             result.value = value;
         } else if (token.type == Kind::LiteralTrue || token.type == Kind::LiteralFalse) {
             result.value = token.type == Kind::LiteralTrue;
@@ -506,6 +559,7 @@ public:
             if (!scalar_character(token.value)) {
                 fail(file, token, "A macro char must contain one Unicode scalar.");
             }
+
             result.value = Character{token.value};
         } else if (token.type == Kind::Null) {
             result.value = std::monostate{};
@@ -518,6 +572,7 @@ public:
         } else if (token.type == Kind::Identifier || type(token)) {
             result.form = Expr::Form::Name;
             result.name = token.value;
+
             if (peek().type == Kind::LeftParen) {
                 result.form = Expr::Form::Call;
                 result.children = arguments();
@@ -526,17 +581,21 @@ public:
             const bool object = token.type == Kind::LeftBrace;
             result.form = object ? Expr::Form::Object : Expr::Form::Array;
             const auto close = object ? Kind::RightBrace : Kind::RightBracket;
+
             if (!accept(close)) {
                 do {
                     if (object) {
                         const auto key = take();
+
                         if (key.type != Kind::Identifier && key.type != Kind::StringLiteral) {
                             fail(file, key, "Object keys must be identifiers or strings.");
                         }
+
                         result.children.push_back(
                             make_node(Expr{Expr::Form::Literal, key, key.value, "", {}}));
                         expect(Kind::Colon, "Expected ':' after object key.");
                     }
+
                     result.children.push_back(expression());
                 } while (accept(Kind::Comma) && peek().type != close);
                 expect(close, "Unclosed macro collection.");
@@ -544,6 +603,7 @@ public:
         } else {
             fail(file, token, "Expected a macro expression.");
         }
+
         return postfix(make_node(std::move(result)));
     }
 
@@ -552,6 +612,7 @@ public:
             if (accept(Kind::Point)) {
                 auto name = expect(Kind::Identifier, "Expected member name.");
                 Expr node{Expr::Form::Member, name, {}, name.value, {base}};
+
                 if (peek().type == Kind::LeftParen) {
                     node.form = Expr::Form::MemberCall;
                     const auto args = arguments();
@@ -566,6 +627,7 @@ public:
                 break;
             }
         }
+
         return base;
     }
 
@@ -578,6 +640,7 @@ public:
             literal.clear();
         };
         const auto& value = content.value;
+
         for (std::size_t i = 0; i < value.size();) {
             if ((value[i] == '{' || value[i] == '}') && i + 1 < value.size() &&
                 value[i] == value[i + 1]) {
@@ -585,9 +648,11 @@ public:
                 i += 2;
                 continue;
             }
+
             if (value[i] == '}') {
                 fail(file, content, "Unmatched '}' in macro formatted string.");
             }
+
             if (value[i] != '{') {
                 literal += value[i++];
                 continue;
@@ -597,8 +662,10 @@ public:
             char quote_char = 0;
             bool escape = false;
             unsigned nesting = 0;
+
             for (; i < value.size(); ++i) {
                 const auto c = value[i];
+
                 if (quote_char) {
                     if (escape) {
                         escape = false;
@@ -618,10 +685,13 @@ public:
                     --nesting;
                 }
             }
+
             if (i == value.size()) {
                 fail(file, content, "Unclosed macro interpolation.");
             }
+
             auto tokens = lex_fragment(value.substr(start, i - start), locate(file, content));
+
             for (auto& token : tokens) {
                 token.line = content.line;
                 token.column = content.column;
@@ -629,9 +699,11 @@ public:
             Parser parser(tokens, 0, file);
             parser.depth = depth;
             auto expr = parser.expression();
+
             if (parser.peek().type != Kind::EndOfFile) {
                 fail(file, content, "Unexpected tokens in macro interpolation.");
             }
+
             format.children.push_back(std::move(expr));
             ++i;
         }
@@ -642,23 +714,30 @@ public:
         Nesting guard(depth, file, peek());
         const auto open = expect(Kind::LeftBrace, "Expected '{' before macro function body.");
         Statement result{Statement::Form::Block, open, "", {Type::Void}, {}, {}};
+
         while (!accept(Kind::RightBrace)) {
             result.children.push_back(statement());
         }
+
         return result;
     }
 
     Statement statement() {
         Nesting guard(depth, file, peek());
+
         if (peek().type == Kind::LeftBrace) {
             return block();
         }
+
         const auto token = peek();
+
         if (accept(Kind::Semicolon)) {
             return {Statement::Form::Block, token, "", {Type::Void}, {}, {}};
         }
+
         if (accept(Kind::Return)) {
             Expression value;
+
             if (peek().type != Kind::Semicolon && peek().type != Kind::RightBrace &&
                 peek().line == token.line) {
                 value = expression();
@@ -666,14 +745,17 @@ public:
             terminator();
             return {Statement::Form::Return, token, "", {Type::Void}, value, {}};
         }
+
         if (accept(Kind::If)) {
             return conditional(token);
         }
+
         if (accept(Kind::WhileLoop)) {
             auto condition = expression();
             auto body = block();
             return {Statement::Form::While, token, "", {Type::Void}, condition, {std::move(body)}};
         }
+
         if (type(peek())) {
             const auto spec = type_spec();
             const auto name = expect(Kind::Identifier, "Expected a name after macro local type.");
@@ -682,6 +764,7 @@ public:
             terminator();
             return {Statement::Form::Declare, name, name.value, spec, value, {}};
         }
+
         if (peek().type == Kind::Identifier &&
             (peek(1).type == Kind::Equal || peek(1).type == Kind::PlusAssign ||
              peek(1).type == Kind::MinusAssign || peek(1).type == Kind::MulAssign ||
@@ -689,9 +772,11 @@ public:
             const auto name = take();
             const auto op = take();
             auto value = expression();
+
             if (op.type != Kind::Equal) {
                 auto lhs = make_node(Expr{Expr::Form::Name, name, {}, name.value, {}});
                 auto operation = op;
+
                 switch (op.type) {
                     case Kind::PlusAssign:
                         operation.type = Kind::Plus;
@@ -714,6 +799,7 @@ public:
             terminator();
             return {Statement::Form::Assign, name, name.value, {Type::Void}, value, {}};
         }
+
         auto value = expression();
         terminator();
         return {Statement::Form::Evaluate, token, "", {Type::Void}, value, {}};
@@ -724,11 +810,13 @@ public:
         auto condition = expression();
         std::vector<Statement> branches;
         branches.push_back(block());
+
         if (accept(Kind::Elif)) {
             branches.push_back(conditional(tokens[cursor - 1]));
         } else if (accept(Kind::Else)) {
             branches.push_back(block());
         }
+
         return {Statement::Form::If, token, "", {Type::Void}, condition, std::move(branches)};
     }
 
@@ -743,6 +831,7 @@ public:
                         {Statement::Form::Block, name, "", {Type::Void}, {}, {}}};
         expect(Kind::LeftParen, "Expected '(' after macro function name.");
         std::set<std::string> names;
+
         if (!accept(Kind::RightParen)) {
             do {
                 const auto type = type_spec();
@@ -752,35 +841,45 @@ public:
                     !names.insert(parameter.value).second) {
                     fail(file, parameter, "Duplicate or reserved macro parameter name.");
                 }
+
                 result.parameters.push_back({parameter.value, type});
             } while (accept(Kind::Comma));
             expect(Kind::RightParen, "Expected ')' after macro parameters.");
         }
+
         if (accept(Kind::Arrow)) {
             result.result = type_spec(true);
         }
+
         if (name.value == "__repr__") {
             fail(file, name, "__repr__ is a built-in read-only macro function.");
         }
+
         if (name.value == "to_string" && result.result != TypeSpec{Type::String}) {
             fail(file, name, "to_string overloads must explicitly return string.");
         }
+
         result.body = block();
         unsigned line = tokens[start].line;
+
         for (auto i = start; i < cursor; ++i) {
             const auto& token = tokens[i];
+
             while (line < token.line) {
                 result.display += '\n';
                 ++line;
             }
+
             if (i != start && tokens[i - 1].type != Kind::FString &&
                 tokens[i - 1].type != Kind::RawString) {
                 result.display += ' ';
             }
+
             result.display += token.type == Kind::StringLiteral ? quote(token.value)
                               : token.type == Kind::CharLiteral ? quote(token.value, '\'')
                                                                 : token.value;
         }
+
         return result;
     }
 };
@@ -846,6 +945,7 @@ class Evaluator {
         if (const auto* n = std::get_if<double>(&value)) {
             return *n;
         }
+
         if (const auto* n = std::get_if<std::int64_t>(&value)) {
             return static_cast<double>(*n);
         }
@@ -856,6 +956,7 @@ class Evaluator {
         if (!std::isfinite(value)) {
             error(frame, token, "Macro floating-point result is not finite.");
         }
+
         return value;
     }
 
@@ -873,34 +974,41 @@ class Evaluator {
         constexpr auto low = std::numeric_limits<std::int64_t>::min();
         constexpr auto high = std::numeric_limits<std::int64_t>::max();
         auto overflow = [&]() -> std::int64_t { error(frame, token, "Macro integer overflow."); };
+
         switch (op) {
             case Kind::Plus:
                 if ((b > 0 && a > high - b) || (b < 0 && a < low - b)) {
                     return overflow();
                 }
+
                 return a + b;
             case Kind::Minus:
                 if ((b > 0 && a < low + b) || (b < 0 && a > high + b)) {
                     return overflow();
                 }
+
                 return a - b;
             case Kind::Star:
                 if (a == 0 || b == 0) {
                     return 0;
                 }
+
                 if (a > 0 ? (b > 0 ? a > high / b : b < low / a)
                           : (b > 0 ? a < low / b : a < high / b)) {
                     return overflow();
                 }
+
                 return a * b;
             case Kind::Slash:
             case Kind::Mod:
                 if (b == 0) {
                     error(frame, token, "Division by zero in macro.");
                 }
+
                 if (a == low && b == -1) {
                     return overflow();
                 }
+
                 return op == Kind::Slash ? a / b : a % b;
             default:
                 error(frame, token, "Unsupported macro integer operation.");
@@ -911,11 +1019,13 @@ class Evaluator {
         if (!frame) {
             return nullptr;
         }
+
         for (auto it = frame->scopes.rbegin(); it != frame->scopes.rend(); ++it) {
             if (const auto found = it->find(name); found != it->end()) {
                 return &found->second;
             }
         }
+
         return nullptr;
     }
 
@@ -923,32 +1033,41 @@ class Evaluator {
         if (frame && frame->macro.definition->name == name) {
             return frame->macro;
         }
+
         const auto it = macros.find(name);
+
         if (it == macros.end()) {
             error(frame, token, "Unknown macro '" + name + "'.");
         }
+
         return it->second;
     }
 
     Value lookup(const Expr& expr, Frame* frame) {
         const auto dot = expr.name.find('.');
+
         if (dot != std::string::npos) {
             auto& macro = named_macro(expr.name.substr(0, dot), frame, expr.token);
             const auto field = expr.name.substr(dot + 1);
+
             if (field == "value") {
                 return macro.value;
             }
+
             if (field == "expression") {
                 return macro.expression;
             }
             error(frame, expr.token, "Unknown macro field '" + field + "'.");
         }
+
         if (const auto* found = binding(frame, expr.name)) {
             return found->value;
         }
+
         if (frame && expr.name == "value") {
             return frame->macro.value;
         }
+
         if (frame && expr.name == "expression") {
             return frame->macro.expression;
         }
@@ -962,15 +1081,19 @@ class Evaluator {
         if (args.size() != 1 || type_of(args.front()) == Type::Void) {
             error(frame, token, "Scalar conversion requires exactly one value.");
         }
+
         const auto& arg = args.front();
         const auto source_type = type_of(arg);
+
         if (name == "string") {
             return text(arg);
         }
+
         if (name == "char") {
             if (source_type == Type::Char) {
                 return arg;
             }
+
             if (const auto* s = std::get_if<std::string>(&arg)) {
                 if (scalar_character(*s)) {
                     return Character{*s};
@@ -978,62 +1101,79 @@ class Evaluator {
             }
             error(frame, token, "char conversion requires one Unicode scalar.");
         }
+
         if (name == "bool") {
             if (source_type == Type::Bool) {
                 return arg;
             }
+
             if (source_type == Type::Int) {
                 return std::get<std::int64_t>(arg) != 0;
             }
+
             if (source_type == Type::Float) {
                 return std::get<double>(arg) != 0;
             }
+
             if (const auto* s = std::get_if<std::string>(&arg)) {
                 if (*s == "true") {
                     return true;
                 }
+
                 if (*s == "false") {
                     return false;
                 }
             }
             error(frame, token, "Invalid explicit bool conversion.");
         }
+
         if (name == "int") {
             if (source_type == Type::Int) {
                 return arg;
             }
+
             if (source_type == Type::Bool) {
                 return static_cast<std::int64_t>(std::get<bool>(arg));
             }
+
             if (source_type == Type::Float) {
                 const auto n = std::get<double>(arg);
+
                 if (n < -0x1p63 || n >= 0x1p63) {
                     error(frame, token, "Float-to-int conversion is out of range.");
                 }
+
                 return static_cast<std::int64_t>(n);
             }
+
             if (const auto* s = std::get_if<std::string>(&arg)) {
                 std::int64_t n = 0;
                 const auto [end, status] = std::from_chars(s->data(), s->data() + s->size(), n);
+
                 if (status == std::errc{} && end == s->data() + s->size()) {
                     return n;
                 }
             }
             error(frame, token, "Invalid explicit int conversion.");
         }
+
         if (name == "float") {
             if (source_type == Type::Float) {
                 return arg;
             }
+
             if (source_type == Type::Int) {
                 return static_cast<double>(std::get<std::int64_t>(arg));
             }
+
             if (source_type == Type::Bool) {
                 return std::get<bool>(arg) ? 1.0 : 0.0;
             }
+
             if (const auto* s = std::get_if<std::string>(&arg)) {
                 double n = 0;
                 const auto [end, status] = std::from_chars(s->data(), s->data() + s->size(), n);
+
                 if (status == std::errc{} && end == s->data() + s->size()) {
                     return finite(n, frame, token);
                 }
@@ -1046,22 +1186,29 @@ class Evaluator {
     Value binary(const Expr& expr, Frame* frame) {
         const auto lhs = eval(expr.children[0], frame);
         const auto op = expr.token.type;
+
         if (op == Kind::And || op == Kind::And_C) {
             if (!boolean(lhs, frame, expr.token)) {
                 return false;
             }
+
             return boolean(eval(expr.children[1], frame), frame, expr.token);
         }
+
         if (op == Kind::Or || op == Kind::Or_C) {
             if (boolean(lhs, frame, expr.token)) {
                 return true;
             }
+
             return boolean(eval(expr.children[1], frame), frame, expr.token);
         }
+
         const auto rhs = eval(expr.children[1], frame);
+
         if (type_of(lhs) == Type::Void || type_of(rhs) == Type::Void) {
             error(frame, expr.token, "void cannot be used as a scalar macro value.");
         }
+
         const bool numbers = (type_of(lhs) == Type::Int || type_of(lhs) == Type::Float) &&
                              (type_of(rhs) == Type::Int || type_of(rhs) == Type::Float);
         if (op == Kind::EqualEqual || op == Kind::NotEqual) {
@@ -1071,82 +1218,106 @@ class Evaluator {
                     : lhs == rhs;
             return op == Kind::EqualEqual ? equal : !equal;
         }
+
         if (op == Kind::Less || op == Kind::LessEqual || op == Kind::Greater ||
             op == Kind::GreaterEqual) {
             auto compare = [op](const auto& a, const auto& b) {
                 if (op == Kind::Less) {
                     return a < b;
                 }
+
                 if (op == Kind::LessEqual) {
                     return a <= b;
                 }
+
                 if (op == Kind::Greater) {
                     return a > b;
                 }
+
                 return a >= b;
             };
+
             if (type_of(lhs) == Type::Int && type_of(rhs) == Type::Int) {
                 return compare(std::get<std::int64_t>(lhs), std::get<std::int64_t>(rhs));
             }
+
             if (numbers) {
                 return compare(number(lhs, frame, expr.token), number(rhs, frame, expr.token));
             }
+
             if (type_of(lhs) == Type::String && type_of(rhs) == Type::String) {
                 return compare(std::get<std::string>(lhs), std::get<std::string>(rhs));
             }
+
             if (type_of(lhs) == Type::Char && type_of(rhs) == Type::Char) {
                 return compare(std::get<Character>(lhs).text, std::get<Character>(rhs).text);
             }
             error(frame, expr.token, "Incompatible macro comparison operands.");
         }
+
         if (op == Kind::Plus && type_of(lhs) == Type::String && type_of(rhs) == Type::String) {
             return append(
                 std::get<std::string>(lhs), std::get<std::string>(rhs), frame, expr.token);
         }
+
         if (op == Kind::BitAnd || op == Kind::BitOr || op == Kind::BitXor ||
             op == Kind::LeftShift || op == Kind::RightShift) {
             auto a = integer(lhs, frame, expr.token);
             const auto b = integer(rhs, frame, expr.token);
+
             if (op == Kind::BitAnd) {
                 return a & b;
             }
+
             if (op == Kind::BitOr) {
                 return a | b;
             }
+
             if (op == Kind::BitXor) {
                 return a ^ b;
             }
+
             if (b < 0 || b >= 64) {
                 error(frame, expr.token, "Macro shift count must be in [0, 63].");
             }
+
             if (op == Kind::RightShift) {
                 return a >> b;
             }
+
             for (std::int64_t i = 0; i < b; ++i) {
                 a = arithmetic(Kind::Star, a, 2, frame, expr.token);
             }
+
             return a;
         }
+
         if (op == Kind::Pow && type_of(lhs) == Type::Int && type_of(rhs) == Type::Int &&
             std::get<std::int64_t>(rhs) >= 0) {
             auto a = std::get<std::int64_t>(lhs), b = std::get<std::int64_t>(rhs);
             std::int64_t result = 1;
+
             while (b) {
                 if (b & 1) {
                     result = arithmetic(Kind::Star, result, a, frame, expr.token);
                 }
                 b >>= 1;
+
                 if (b) {
                     a = arithmetic(Kind::Star, a, a, frame, expr.token);
                 }
             }
+
             return result;
         }
+
         if (numbers && type_of(lhs) == Type::Int && type_of(rhs) == Type::Int && op != Kind::Pow) {
             return arithmetic(
                 op, std::get<std::int64_t>(lhs), std::get<std::int64_t>(rhs), frame, expr.token);
         }
+
         const auto a = number(lhs, frame, expr.token), b = number(rhs, frame, expr.token);
+
         switch (op) {
             case Kind::Plus:
                 return finite(a + b, frame, expr.token);
@@ -1158,6 +1329,7 @@ class Evaluator {
                 if (b == 0) {
                     error(frame, expr.token, "Division by zero in macro.");
                 }
+
                 return finite(a / b, frame, expr.token);
             case Kind::Pow:
                 return finite(std::pow(a, b), frame, expr.token);
@@ -1168,14 +1340,19 @@ class Evaluator {
 
     Value call(const Expr& expr, Frame* frame) {
         std::vector<Value> arguments;
+
         for (const auto& child : expr.children) {
             auto arg = eval(child, frame);
+
             if (type_of(arg) == Type::Void) {
                 error(frame, expr.token, "void cannot be a macro argument.");
             }
+
             arguments.push_back(std::move(arg));
         }
+
         const auto dot = expr.name.find('.');
+
         if (dot == std::string::npos &&
             (expr.name == "int" || expr.name == "float" || expr.name == "bool" ||
              expr.name == "string" || expr.name == "char")) {
@@ -1183,76 +1360,96 @@ class Evaluator {
         }
         Macro* target = frame ? &frame->macro : nullptr;
         std::string method = expr.name;
+
         if (dot != std::string::npos) {
             target = &named_macro(expr.name.substr(0, dot), frame, expr.token);
             method = expr.name.substr(dot + 1);
         }
+
         if (!target) {
             error(frame, expr.token, "Macro argument calls require an explicit macro member.");
         }
+
         return invoke(*target, method, arguments, expr.token, file(frame));
     }
 
     Value collection(Value value, Frame* frame, const Token& token) {
         std::vector<std::pair<const Value*, unsigned>> pending{{&value, 1}};
+
         while (!pending.empty()) {
             const auto [item, depth] = pending.back();
             pending.pop_back();
             budget.step(file(frame), token);
+
             if (depth > 128) {
                 error(frame, token, "Macro value nesting exceeds 128.");
             }
+
             if (type_of(*item) == Type::Void) {
                 error(frame, token, "Collections cannot contain void.");
             }
+
             if (const auto* a = std::get_if<Array>(item)) {
                 for (const auto& child : *a) {
                     pending.emplace_back(&child, depth + 1);
                 }
             }
+
             if (const auto* o = std::get_if<Object>(item)) {
                 for (const auto& [key, child] : *o) {
                     pending.emplace_back(&child, depth + 1);
                 }
             }
         }
+
         return value;
     }
 
     Value member(const Expr& expr, Frame* frame) {
         const auto& receiver = expr.children[0];
         std::vector<Value> args;
+
         for (std::size_t i = 1; i < expr.children.size(); ++i) {
             args.push_back(eval(expr.children[i], frame));
         }
+
         const bool call = expr.form == Expr::Form::MemberCall;
+
         if (receiver->form == Expr::Form::Name && macros.contains(receiver->name)) {
             auto& macro = named_macro(receiver->name, frame, expr.token);
+
             if (call) {
                 return invoke(macro, expr.name, args, expr.token, file(frame));
             }
+
             if (expr.name == "value") {
                 return macro.value;
             }
+
             if (expr.name == "expression") {
                 return macro.expression;
             }
             error(frame, expr.token, "Macro methods require '()'.");
         }
+
         auto value = eval(receiver, frame);
+
         if (!call) {
             if (const auto* object = std::get_if<Object>(&value)) {
                 if (const auto it = object->find(expr.name); it != object->end()) {
                     return it->second;
                 }
             }
+
             if (expr.name == "length") {
                 if (const auto* a = std::get_if<Array>(&value)) {
                     return static_cast<std::int64_t>(a->size());
                 }
+
                 if (const auto* o = std::get_if<Object>(&value)) {
                     return static_cast<std::int64_t>(o->size());
                 }
+
                 if (const auto* t = std::get_if<std::string>(&value)) {
                     return static_cast<std::int64_t>(std::count_if(
                         t->begin(), t->end(), [](unsigned char c) { return (c & 0xc0) != 0x80; }));
@@ -1260,11 +1457,13 @@ class Evaluator {
             }
         } else if (expr.name == "sorted" && args.empty() && std::holds_alternative<Array>(value)) {
             auto result = std::get<Array>(value);
+
             for (const auto& item : result) {
                 if (type_of(item) != Type::Int) {
                     error(frame, expr.token, "sorted currently requires an int array.");
                 }
             }
+
             std::sort(result.begin(), result.end(), [](const Value& a, const Value& b) {
                 return std::get<std::int64_t>(a) < std::get<std::int64_t>(b);
             });
@@ -1272,6 +1471,7 @@ class Evaluator {
         } else if ((expr.name == "upper" || expr.name == "lower") && args.empty() &&
                    std::holds_alternative<std::string>(value)) {
             auto result = std::get<std::string>(value);
+
             for (auto& c : result) {
                 if (expr.name == "upper" && c >= 'a' && c <= 'z') {
                     c -= 32;
@@ -1279,6 +1479,7 @@ class Evaluator {
                     c += 32;
                 }
             }
+
             return result;
         }
         error(frame,
@@ -1290,6 +1491,7 @@ class Evaluator {
         if (type_of(value) == Type::Void) {
             error(&frame, statement.token, "Cannot assign void in a macro.");
         }
+
         if (auto* local = binding(&frame, statement.name)) {
             local->value = typed(std::move(value), local->type, frame.file(), statement.token);
         } else if (statement.name == "value") {
@@ -1310,15 +1512,18 @@ class Evaluator {
     std::optional<Returned> execute(const Statement& statement, Frame& frame) {
         budget.step(frame.file(), statement.token);
         Nesting guard(budget.depth, frame.file(), statement.token);
+
         switch (statement.form) {
             case Statement::Form::Block: {
                 frame.scopes.emplace_back();
+
                 for (const auto& child : statement.children) {
                     if (auto returned = execute(child, frame)) {
                         frame.scopes.pop_back();
                         return returned;
                     }
                 }
+
                 frame.scopes.pop_back();
                 break;
             }
@@ -1327,6 +1532,7 @@ class Evaluator {
                     frame.scopes.back().contains(statement.name)) {
                     error(&frame, statement.token, "Duplicate or reserved macro local name.");
                 }
+
                 auto value = typed(eval(statement.expression, &frame),
                                    statement.type,
                                    frame.file(),
@@ -1348,6 +1554,7 @@ class Evaluator {
                 if (boolean(eval(statement.expression, &frame), &frame, statement.token)) {
                     return execute(statement.children[0], frame);
                 }
+
                 if (statement.children.size() == 2) {
                     return execute(statement.children[1], frame);
                 }
@@ -1360,6 +1567,7 @@ class Evaluator {
                 }
                 break;
         }
+
         return std::nullopt;
     }
 
@@ -1371,15 +1579,19 @@ public:
 
     static int match(const Value& value, TypeSpec expected) {
         const auto actual = type_of(value);
+
         if (actual == Type::Null) {
             return expected.nullable ? 1 : -1;
         }
+
         if (actual == expected.type) {
             return expected.nullable ? 1 : 0;
         }
+
         if (actual == Type::Int && expected.type == Type::Float) {
             return expected.nullable ? 3 : 2;
         }
+
         return -1;
     }
 
@@ -1388,15 +1600,18 @@ public:
         if (expected == TypeSpec{Type::Void} && type_of(value) == Type::Void) {
             return value;
         }
+
         if (match(value, expected) < 0) {
             fail(file,
                  token,
                  "Expected macro type " + type_name(expected) + ", got " +
                      type_name({type_of(value)}) + ".");
         }
+
         if (type_of(value) == Type::Int && expected.type == Type::Float) {
             return static_cast<double>(std::get<std::int64_t>(value));
         }
+
         return value;
     }
 
@@ -1404,32 +1619,40 @@ public:
         const auto& expr = *expression;
         budget.step(file(frame), expr.token);
         Nesting guard(budget.depth, file(frame), expr.token);
+
         switch (expr.form) {
             case Expr::Form::Literal:
                 if (const auto* s = std::get_if<std::string>(&expr.value);
                     s && s->size() > max_string) {
                     error(frame, expr.token, "Macro string/source exceeds 1 MiB.");
                 }
+
                 return expr.value;
             case Expr::Form::Member:
             case Expr::Form::MemberCall:
                 return member(expr, frame);
             case Expr::Form::Array: {
                 Array result;
+
                 for (const auto& child : expr.children) {
                     result.push_back(eval(child, frame));
                 }
+
                 return collection(std::move(result), frame, expr.token);
             }
             case Expr::Form::Object: {
                 Object result;
+
                 for (std::size_t i = 0; i < expr.children.size(); i += 2) {
                     const auto key = std::get<std::string>(eval(expr.children[i], frame));
+
                     if (result.contains(key)) {
                         error(frame, expr.token, "Duplicate object key.");
                     }
+
                     result.emplace(key, eval(expr.children[i + 1], frame));
                 }
+
                 return collection(std::move(result), frame, expr.token);
             }
             case Expr::Form::Index: {
@@ -1437,14 +1660,18 @@ public:
                            index = eval(expr.children[1], frame);
                 if (const auto* a = std::get_if<Array>(&base)) {
                     const auto n = integer(index, frame, expr.token);
+
                     if (n < 0 || static_cast<std::size_t>(n) >= a->size()) {
                         error(frame, expr.token, "Array index out of range.");
                     }
+
                     return (*a)[n];
                 }
+
                 if (const auto* o = std::get_if<Object>(&base);
                     o && std::holds_alternative<std::string>(index)) {
                     const auto it = o->find(std::get<std::string>(index));
+
                     if (it != o->end()) {
                         return it->second;
                     }
@@ -1459,12 +1686,15 @@ public:
                 return call(expr, frame);
             case Expr::Form::Unary: {
                 const auto value = eval(expr.children[0], frame);
+
                 if (expr.token.type == Kind::Not || expr.token.type == Kind::Not_C) {
                     return !boolean(value, frame, expr.token);
                 }
+
                 if (expr.token.type == Kind::BitNot) {
                     return ~integer(value, frame, expr.token);
                 }
+
                 if (type_of(value) == Type::Int) {
                     return expr.token.type == Kind::Minus
                                ? arithmetic(Kind::Minus,
@@ -1474,18 +1704,22 @@ public:
                                             expr.token)
                                : value;
                 }
+
                 const auto n = number(value, frame, expr.token);
                 return expr.token.type == Kind::Minus ? -n : n;
             }
             case Expr::Form::Format: {
                 std::string result;
+
                 for (const auto& child : expr.children) {
                     const auto value = eval(child, frame);
+
                     if (type_of(value) == Type::Void) {
                         error(frame, expr.token, "Cannot interpolate void.");
                     }
                     result = append(std::move(result), text(value), frame, expr.token);
                 }
+
                 return result;
             }
         }
@@ -1506,6 +1740,7 @@ public:
         add(text(macro.expression, true));
         add("; functions = [");
         bool first = true;
+
         for (const auto& [name, overloads] : macro.definition->functions) {
             for (const auto& function : overloads) {
                 if (!first) {
@@ -1513,6 +1748,7 @@ public:
                 }
                 first = false;
                 add(name + "(");
+
                 for (std::size_t i = 0; i < function.parameters.size(); ++i) {
                     if (i) {
                         add(", ");
@@ -1532,19 +1768,25 @@ public:
                  const Token& token,
                  const std::string& caller_file) {
         budget.step(caller_file, token);
+
         if (name == "__repr__") {
             if (!args.empty()) {
                 fail(caller_file, token, "__repr__ takes no arguments.");
             }
+
             auto result = representation(macro);
+
             if (result.size() > max_string) {
                 fail(caller_file, token, "Macro representation exceeds 1 MiB.");
             }
+
             return result;
         }
+
         const Function* selected = nullptr;
         int best = std::numeric_limits<int>::max();
         bool ambiguous = false;
+
         if (const auto it = macro.definition->functions.find(name);
             it != macro.definition->functions.end()) {
             for (const auto& candidate : it->second) {
@@ -1553,17 +1795,21 @@ public:
                 }
                 int score = 0;
                 bool valid = true;
+
                 for (std::size_t i = 0; i < args.size(); ++i) {
                     const auto part = match(args[i], candidate.parameters[i].type);
+
                     if (part < 0) {
                         valid = false;
                         break;
                     }
                     score += part;
                 }
+
                 if (!valid) {
                     continue;
                 }
+
                 if (score < best) {
                     selected = &candidate;
                     best = score;
@@ -1573,31 +1819,38 @@ public:
                 }
             }
         }
+
         if (!selected && name == "to_string" && args.empty()) {
             const auto prefix = std::get_if<std::string>(&macro.expression);
             auto source = text(macro.value, true);
+
             if (!prefix) {
                 return source;
             }
             // Keep identifier-like prefix/value boundaries from fusing ("return" + "1").
             std::string result = *prefix;
             auto word = [](unsigned char c) { return std::isalnum(c) || c == '_'; };
+
             if (!result.empty() && !source.empty() && word(result.back()) && word(source.front())) {
                 result += ' ';
             }
+
             return append(std::move(result), source, nullptr, token);
         }
+
         if (!selected || ambiguous) {
             fail(caller_file,
                  token,
                  std::string(ambiguous ? "Ambiguous" : "No matching") + " macro overload '" +
                      macro.definition->name + "." + name + "'.");
         }
+
         if (budget.calls >= 64) {
             fail(caller_file, token, "Macro function call depth exceeds 64.");
         }
         ++budget.calls;
         Frame frame{macro};
+
         for (std::size_t i = 0; i < args.size(); ++i) {
             frame.scopes.front().emplace(
                 selected->parameters[i].name,
@@ -1605,6 +1858,7 @@ public:
                         typed(args[i], selected->parameters[i].type, caller_file, token)});
         }
         Value result = VoidValue{};
+
         try {
             if (auto returned = execute(selected->body, frame)) {
                 result = std::move(returned->value);
@@ -1631,10 +1885,12 @@ struct MacroEnvironment::Impl {
     void define(const std::vector<Token>& input, std::size_t& cursor, const std::string& file) {
         Parser parser(input, cursor, file);
         const auto name = parser.expect(Kind::Identifier, "Expected macro name.");
+
         if (name.value == "fn" || name.value == "value" || name.value == "expression" ||
             macros.contains(name.value)) {
             fail(file, name, "Duplicate or reserved macro name '" + name.value + "'.");
         }
+
         parser.expect(Kind::LeftBrace, "Expected '{' after macro name.");
         auto definition = std::make_shared<Definition>();
         definition->name = name.value;
@@ -1648,36 +1904,45 @@ struct MacroEnvironment::Impl {
 
         std::vector<Initializer> initializers;
         std::set<std::string> fields;
+
         while (!parser.accept(Kind::RightBrace)) {
             if (parser.accept(Kind::Semicolon)) {
                 continue;
             }
+
             if (parser.peek().type == Kind::Identifier && parser.peek().value == "fn") {
                 auto function = parser.function();
                 auto& overloads = definition->functions[function.name];
+
                 for (const auto& existing : overloads) {
                     if (existing.parameters.size() != function.parameters.size()) {
                         continue;
                     }
                     bool same = true;
+
                     for (std::size_t i = 0; i < existing.parameters.size(); ++i) {
                         same = same && existing.parameters[i].type == function.parameters[i].type;
                     }
+
                     if (same) {
                         fail(file, function.token, "Duplicate macro function signature.");
                     }
                 }
+
                 overloads.push_back(std::move(function));
                 continue;
             }
+
             const auto field = parser.expect(
                 Kind::Identifier, "Expected 'value', 'expression' or contextual 'fn' in macro.");
             if ((field.value != "value" && field.value != "expression") ||
                 !fields.insert(field.value).second) {
                 fail(file, field, "Unknown or duplicate macro field '" + field.value + "'.");
             }
+
             parser.expect(Kind::Colon, "Expected ':' after macro field.");
             Expression expression;
+
             if (field.value == "expression" && parser.accept(Kind::TernaryOp)) {
                 definition->nullable_expression = true;
                 expression = parser.make_node(Expr{Expr::Form::Literal, field, {}, "", {}});
@@ -1687,23 +1952,30 @@ struct MacroEnvironment::Impl {
                 }
                 expression = parser.expression();
             }
+
             parser.terminator();
             initializers.push_back({field, field.value, std::move(expression)});
         }
+
         parser.accept(Kind::Semicolon);
         cursor = parser.cursor;
+
         if (!fields.contains("value")) {
             fail(file, name, "Macro requires a 'value' initializer.");
         }
+
         auto& macro = macros.emplace(name.value, Macro{definition, {}, {}}).first->second;
         Budget budget;
         Evaluator evaluator(macros, budget, file);
         Frame frame{macro};
+
         for (const auto& initializer : initializers) {
             auto value = evaluator.eval(initializer.expression, &frame);
+
             if (type_of(value) == Type::Void) {
                 fail(file, initializer.token, "Macro field cannot contain void.");
             }
+
             if (initializer.name == "value") {
                 macro.value = std::move(value);
             } else {
@@ -1720,6 +1992,7 @@ struct MacroEnvironment::Impl {
             throw MacroError(location,
                              "Macro expansion exceeds 1000000 generated tokens per module.");
         }
+
         out.push_back(std::move(token));
     }
 
@@ -1731,9 +2004,11 @@ struct MacroEnvironment::Impl {
         const auto start = cursor;
         const auto invocation = input[cursor];
         const auto location = locate(file, invocation);
+
         if (depth >= 64) {
             throw MacroError(location, "Recursive macro expansion exceeds 64 levels.");
         }
+
         auto& macro = macros.at(invocation.value);
         ++cursor;
         Evaluator evaluator(macros, budget, file);
@@ -1741,25 +2016,31 @@ struct MacroEnvironment::Impl {
         const bool member = input[cursor].type == Kind::Point;
         Value result;
         const bool call = input[cursor].type == Kind::LeftParen;
+
         if (member) {
             Parser parser(input, start, file);
             result = evaluator.eval(parser.unary());
             cursor = parser.cursor;
         } else {
             std::vector<Value> arguments;
+
             if (call) {
                 Parser parser(input, cursor, file);
+
                 for (const auto& argument : parser.arguments()) {
                     auto value = evaluator.eval(argument);
+
                     if (type_of(value) == Type::Void) {
                         fail(file, invocation, "void cannot be a macro argument.");
                     }
+
                     arguments.push_back(std::move(value));
                 }
                 cursor = parser.cursor;
             }
             result = evaluator.invoke(macro, method, arguments, invocation, file);
         }
+
         if (type_of(result) == Type::Void) {
             if (start != 0 && input[start - 1].line == invocation.line &&
                 input[start - 1].type != Kind::Semicolon &&
@@ -1774,10 +2055,13 @@ struct MacroEnvironment::Impl {
                        input[cursor].line == input[cursor - 1].line) {
                 fail(file, invocation, "Void macro call must end its source statement.");
             }
+
             return {};
         }
+
         if (member) {
             std::vector<Token> tokens;
+
             if (const auto* s = std::get_if<std::string>(&result)) {
                 append(tokens,
                        {Kind::StringLiteral, *s, invocation.line, invocation.column},
@@ -1788,28 +2072,35 @@ struct MacroEnvironment::Impl {
                        location);
             } else {
                 auto literals = lex_fragment(text(result, true), location);
+
                 for (auto& token : literals) {
                     if (token.type == Kind::EndOfFile) {
                         break;
                     }
+
                     token.line = invocation.line;
                     token.column = invocation.column;
                     append(tokens, std::move(token), location);
                 }
             }
+
             return tokens;
         }
+
         if (type_of(result) != Type::String) {
             fail(file, invocation, "Macro to_string must return string source.");
         }
+
         auto generated = lex_fragment(std::get<std::string>(result), location);
         std::vector<Token> output;
+
         for (std::size_t i = 0; i + 1 < generated.size();) {
             if (generated[i].type == Kind::Import || generated[i].type == Kind::Macro) {
                 fail(file,
                      invocation,
                      "Macro expansions cannot introduce imports or macro declarations.");
             }
+
             if (generated[i].type == Kind::Identifier && macros.contains(generated[i].value)) {
                 try {
                     const auto generated_file = "<generated " + macro.definition->name + ">";
@@ -1828,11 +2119,14 @@ struct MacroEnvironment::Impl {
                 append(output, generated[i++], location);
             }
         }
+
         for (auto& token : output) {
             token.line = invocation.line;
             token.column = invocation.column;
         }
+
         std::vector<Kind> delimiters;
+
         for (const auto& token : output) {
             if (token.type == Kind::LeftParen) {
                 delimiters.push_back(Kind::RightParen);
@@ -1845,12 +2139,15 @@ struct MacroEnvironment::Impl {
                 if (delimiters.empty() || delimiters.back() != token.type) {
                     fail(file, invocation, "Unbalanced delimiters in macro-generated source.");
                 }
+
                 delimiters.pop_back();
             }
         }
+
         if (!delimiters.empty()) {
             fail(file, invocation, "Unbalanced delimiters in macro-generated source.");
         }
+
         return output;
     }
 };
@@ -1867,6 +2164,7 @@ MacroEnvironment& MacroEnvironment::operator=(const MacroEnvironment& other) {
     if (this != &other) {
         impl = std::make_unique<Impl>(*other.impl);
     }
+
     return *this;
 }
 
@@ -1881,12 +2179,14 @@ void MacroEnvironment::print(std::ostream& out) const {
             return std::string("<representation exceeds limit>");
         }
     };
+
     for (const auto& [name, macro] : impl->macros) {
         out << name << ":\n    value: " << display(macro.value)
             << "\n    expression: " << display(macro.expression) << "\n    method: to_string"
             << (macro.definition->functions.contains("to_string") ? " (overridden)" : " (built-in)")
             << "\n";
         out << "    built-in: __repr__() -> string\n";
+
         for (const auto& [method, overloads] : macro.definition->functions) {
             for (const auto& function : overloads) {
                 out << "    " << function.display << "\n";
@@ -1907,6 +2207,7 @@ void MacroEnvironment::define(const std::vector<Token>& input,
         throw MacroError({driver::SourceKind::BufferNoAST, file, "", 1, 1},
                          "Invalid macro definition token stream.");
     }
+
     auto next = std::make_unique<Impl>(*impl);
     auto position = cursor;
     next->define(input, position, file);
@@ -1924,6 +2225,7 @@ void MacroEnvironment::import(const MacroEnvironment& dependency, const Location
                                  macro.definition->location.file + ").");
         }
     }
+
     for (const auto& [name, macro] : dependency.impl->macros) {
         impl->macros.try_emplace(name, macro);
     }
@@ -1936,9 +2238,11 @@ std::vector<Token> MacroEnvironment::expand(const std::vector<Token>& input,
         throw MacroError({driver::SourceKind::BufferNoAST, file, "", 1, 1},
                          "Invalid macro invocation token stream.");
     }
+
     if (!contains(input[cursor].value)) {
         fail(file, input[cursor], "Unknown macro '" + input[cursor].value + "'.");
     }
+
     auto next = std::make_unique<Impl>(*impl);
     auto position = cursor;
     Budget budget;

@@ -8,6 +8,7 @@ namespace {
 std::string type_name(const TypeRef& type) {
     std::string name = type.constant ? "const " : "";
     name += type.name;
+
     if (type.value_argument) {
         if (const auto* literal = dynamic_cast<const LiteralExpr*>(type.value_argument.get())) {
             name += literal->value;
@@ -17,8 +18,10 @@ std::string type_name(const TypeRef& type) {
             name += "<expression>";
         }
     }
+
     if (!type.arguments.empty()) {
         name += "[";
+
         for (const auto& argument : type.arguments) {
             if (name.back() != '[') {
                 name += ", ";
@@ -27,6 +30,7 @@ std::string type_name(const TypeRef& type) {
         }
         name += "]";
     }
+
     for (const auto& alternative : type.alternatives) {
         if (!name.empty()) {
             name += " | ";
@@ -34,9 +38,11 @@ std::string type_name(const TypeRef& type) {
         name += type_name(alternative);
     }
     name += std::string(type.pointers, '*');
+
     if (type.reference) {
         name += "&";
     }
+
     return name;
 }
 
@@ -50,6 +56,7 @@ void node(const Node& syntax_node, std::ostream& out, unsigned depth) {
     auto label = [&](const std::string& text) {
         out << text << " @" << syntax_node.span.line << ':' << syntax_node.span.column << '\n';
     };
+
     if (const auto* name = dynamic_cast<const NameExpr*>(&syntax_node)) {
         label("Name " + name->name);
     } else if (const auto* literal = dynamic_cast<const LiteralExpr*>(&syntax_node)) {
@@ -74,6 +81,7 @@ void node(const Node& syntax_node, std::ostream& out, unsigned depth) {
     } else if (const auto* call = dynamic_cast<const CallExpr*>(&syntax_node)) {
         label("Call");
         child(call->callee);
+
         for (const auto& a : call->arguments) {
             child(a);
         }
@@ -97,11 +105,13 @@ void node(const Node& syntax_node, std::ostream& out, unsigned depth) {
         child(cast->value);
     } else if (const auto* allocation = dynamic_cast<const NewExpr*>(&syntax_node)) {
         label("New " + type_name(allocation->type));
+
         for (const auto& a : allocation->arguments) {
             child(a);
         }
     } else if (const auto* formatted_string = dynamic_cast<const FormattedExpr*>(&syntax_node)) {
         label("FormattedString");
+
         for (const auto& part : formatted_string->parts) {
             child(part);
         }
@@ -109,6 +119,7 @@ void node(const Node& syntax_node, std::ostream& out, unsigned depth) {
         const char* names[] = {
             "ArrayLiteral", "VectorLiteral", "TupleLiteral", "DictionaryLiteral", "EmptyBraces"};
         label(names[static_cast<unsigned>(collection->kind)]);
+
         for (const auto& e : collection->elements) {
             child(e);
         }
@@ -116,12 +127,14 @@ void node(const Node& syntax_node, std::ostream& out, unsigned depth) {
         label("For");
         child(loop->initialization);
         child(loop->condition);
+
         for (const auto& u : loop->updates) {
             child(u);
         }
         child(loop->body);
     } else if (const auto* declaration_group = dynamic_cast<const DeclGroup*>(&syntax_node)) {
         label("Declarations");
+
         for (const auto& d : declaration_group->declarations) {
             child(d);
         }
@@ -129,6 +142,7 @@ void node(const Node& syntax_node, std::ostream& out, unsigned depth) {
         label("Alias " + alias->name + " = " + type_name(*alias->type_target));
     } else if (const auto* record = dynamic_cast<const RecordDecl*>(&syntax_node)) {
         label(std::string(record->is_class ? "Class " : "Struct ") + record->name);
+
         for (const auto& m : record->members) {
             if (!m.visibility.empty()) {
                 out << std::string((depth + 1) * 2, ' ') << "Visibility " << m.visibility << '\n';
@@ -138,6 +152,7 @@ void node(const Node& syntax_node, std::ostream& out, unsigned depth) {
     } else if (const auto* try_statement = dynamic_cast<const TryStmt*>(&syntax_node)) {
         label("Try");
         child(try_statement->body);
+
         for (const auto& h : try_statement->handlers) {
             out << std::string((depth + 1) * 2, ' ') << "Catch " << type_name(h.type) << " "
                 << h.name << '\n';
@@ -148,6 +163,7 @@ void node(const Node& syntax_node, std::ostream& out, unsigned depth) {
         child(throw_statement->value);
     } else if (const auto* block = dynamic_cast<const Block*>(&syntax_node)) {
         label("Block");
+
         for (const auto& s : block->statements) {
             child(s);
         }
@@ -187,6 +203,7 @@ void node(const Node& syntax_node, std::ostream& out, unsigned depth) {
 
 void dump(const ModuleAST& module, std::ostream& out) {
     out << "ModuleAST [" << module.module << "]\n";
+
     for (const auto& statement : module.statements) {
         node(*statement, out, 1);
     }

@@ -114,7 +114,7 @@ class CliIntegration(unittest.TestCase):
         result = self.run_tool(OPTICC, "debug", source)
         self.assertEqual(result.returncode, 0, result.stderr)
         expected = (
-            "Compiler configuration\n\n"
+            "----- COMPILER CONFIGURATION -----\n"
             "  Input files\n"
             f"    {source}\n"
             "\n  Options\n"
@@ -136,7 +136,7 @@ class CliIntegration(unittest.TestCase):
         self.assertRegex(enabled.stdout, rb"-g +enabled")
         for mode in ("build", "run"):
             result = self.run_tool(OPTICC, mode, source)
-            self.assertNotIn(b"Compiler configuration", result.stdout)
+            self.assertNotIn(b"COMPILER CONFIGURATION", result.stdout)
 
     def test_debug_two_sources_in_vscode_through_cli(self):
         directory = self.directory / ".vscode"
