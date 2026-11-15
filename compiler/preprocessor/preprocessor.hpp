@@ -36,14 +36,12 @@ private:
     std::size_t lexical_tokens = 0;
 
     void trace(const std::string& message) const;
-    void
-    error(const driver::Module& module, const lexer::token_t& token, const std::string& message);
+    void error(const driver::Module& module, const lexer::token_t& token, const std::string& message);
 
     driver::ModuleID load(const std::filesystem::path& path, const driver::SourceLocation& loc);
     bool process(driver::ModuleID id, std::size_t depth);
     bool tokenize_module(driver::ModuleID id, std::vector<lexer::token_t>& input);
-    void
-    filter_tokens(driver::ModuleID id, std::span<const lexer::token_t> input, std::size_t depth);
+    void filter_tokens(driver::ModuleID id, std::span<const lexer::token_t> input, std::size_t depth);
 
     static bool parse_import_name(std::span<const lexer::token_t> tokens,
                                   std::size_t& cursor,

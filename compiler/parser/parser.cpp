@@ -48,13 +48,11 @@ ast::SourceSpan Parser::span(const lexer::token_t& start) const {
 }
 
 void Parser::skip_newlines() {
-    while (cursor.accept(Newline)) {
-    }
+    while (cursor.accept(Newline));
 }
 
 void Parser::skip_separators() {
-    while (cursor.accept(Newline) || cursor.accept(Semicolon)) {
-    }
+    while (cursor.accept(Newline) || cursor.accept(Semicolon));
 }
 
 void Parser::expect_statement_end() {
@@ -128,11 +126,12 @@ std::unique_ptr<ast::ModuleAST> Parser::parse() {
 
 std::unique_ptr<ast::Block> Parser::parse_block() {
     Depth guard(*this);
+
     // Newlines inside a block terminate its statements even if an enclosing expression
     // has soft skip_newlines (e.g. collection literal containing a call).
     skip_newlines();
-    const auto start =
-        expect(LeftBrace, "Expected '{' to begin a block; ':' blocks are not supported.");
+
+    const auto start = expect(LeftBrace, "Expected '{' to begin a block; ':' blocks are not supported.");
     auto result = std::make_unique<ast::Block>(span(start));
     skip_separators();
 
@@ -267,10 +266,11 @@ ast::StmtPtr Parser::parse_statement(bool declarations) {
         }
 
         const auto begin = cursor.position();
-        auto declaration = parse_variable_declaration();
         const auto end = cursor.position();
-        cursor.restore(begin);
         const auto saved_probe = probing;
+        auto declaration = parse_variable_declaration();
+
+        cursor.restore(begin);
         probing = true;
         ast::ExprPtr alternative;
 

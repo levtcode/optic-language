@@ -5,13 +5,13 @@
 
 namespace optic::compiler::lexer {
 void Lexer::tokenize_layout(std::vector<token_t>& tokens) {
+    const auto source = module.get_buffer();
     std::vector<token_t> raw;
+    std::size_t previous_end = 0, scanned = 0;
+    unsigned line = 1, column = 1;
+
     tokenize(raw);
     tokens.clear();
-    const auto source = module.get_buffer();
-    std::size_t previous_end = 0;
-    unsigned line = 1, column = 1;
-    std::size_t scanned = 0;
 
     for (const auto& token : raw) {
         const auto gap = source.substr(previous_end, token.offset - previous_end);

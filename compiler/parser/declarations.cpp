@@ -13,6 +13,7 @@ ast::StmtPtr Parser::parse_function(bool constructor) {
 
     const auto name = expect(Identifier, "Expected a function name.").value;
     auto result = std::make_unique<ast::FunctionDecl>(span(start), name);
+
     result->constructor = constructor;
     expect(LeftParen, "Expected '(' after the function name.");
     {
@@ -26,6 +27,7 @@ ast::StmtPtr Parser::parse_function(bool constructor) {
                 const auto parameter_name =
                     expect(Identifier, "Expected a parameter name; use name: Type for annotations.")
                         .value;
+
                 std::optional<ast::TypeRef> annotation;
 
                 if (cursor.accept(Colon)) {
@@ -62,6 +64,7 @@ ast::StmtPtr Parser::parse_variable_declaration(bool end) {
     const auto start = cursor.peek();
     auto declared_type = parse_type(false);
     auto group = std::make_unique<ast::DeclGroup>(span(start));
+
     do {
         const auto declaration_start = cursor.peek();
         const auto name = expect(Identifier, "Expected a variable name after its type.").value;
@@ -74,6 +77,7 @@ ast::StmtPtr Parser::parse_variable_declaration(bool end) {
         group->declarations.push_back(std::make_unique<ast::VariableDecl>(
             span(declaration_start), declared_type, name, std::move(value)));
     } while (cursor.accept(Comma));
+
     group->span = span(start);
 
     if (end) {
@@ -108,6 +112,7 @@ ast::StmtPtr Parser::parse_for_statement() {
                     std::make_unique<ast::ExprStmt>(span(first), std::move(value));
             }
         }
+
         skip_newlines();
         expect(Semicolon, "Expected ';' after the for initialization.");
         skip_newlines();
@@ -115,6 +120,7 @@ ast::StmtPtr Parser::parse_for_statement() {
         if (!cursor.at(Semicolon)) {
             result->condition = parse_expression();
         }
+
         skip_newlines();
         expect(Semicolon, "Expected ';' after the for condition.");
         skip_newlines();
@@ -138,6 +144,7 @@ ast::StmtPtr Parser::parse_record() {
     const auto start = cursor.advance();
     const auto name = expect(Identifier, "Expected a class or struct name.").value;
     auto result = std::make_unique<ast::RecordDecl>(span(start), name, start.type == Class);
+
     skip_newlines();
     expect(LeftBrace, "Expected '{' to begin the record.");
     skip_separators();
@@ -205,8 +212,7 @@ ast::StmtPtr Parser::parse_try_statement() {
         }
 
         auto body = parse_block();
-        result->handlers.push_back(
-            {span(handler_start), std::move(*exception_type), name, std::move(body)});
+        result->handlers.push_back({span(handler_start), std::move(*exception_type), name, std::move(body)});
         skip_newlines();
     }
     result->span = span(start);
@@ -237,8 +243,10 @@ ast::StmtPtr Parser::parse_type_alias() {
     }
 
     expect(As, "Expected 'as' between the original type and its new name.");
+
     const auto name = expect(Identifier, "Expected a new alias name.").value;
     auto result = std::make_unique<ast::AliasDecl>(span(start), name);
+
     result->type_target = std::move(target);
     expect_statement_end();
     return result;

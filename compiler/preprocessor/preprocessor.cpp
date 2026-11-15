@@ -19,11 +19,10 @@ void Preprocessor::trace(const std::string& message) const {
     }
 }
 
-void Preprocessor::error(const Module& module,
-                         const lexer::token_t& token,
-                         const std::string& message) {
+void Preprocessor::error(const Module& module, const lexer::token_t& token, const std::string& message) {
     trace("Failed at " + module.get_path() + ":" + std::to_string(token.line) + ":" +
           std::to_string(token.column) + ": " + message);
+
     context.diagnostics().report(
         {SourceKind::BufferNoAST, module.get_path(), "", token.line, token.column},
         "Error: " + message,
@@ -36,8 +35,7 @@ ModuleID Preprocessor::load(const std::filesystem::path& path, const SourceLocat
     auto& graph = context.modules();
 
     if (const auto existing = graph.find_module(path); existing != invalid_module_id) {
-        trace("Reusing module [" + std::to_string(existing) +
-              "]: " + graph.get_module(existing)->get_path());
+        trace("Reusing module [" + std::to_string(existing) + "]: " + graph.get_module(existing)->get_path());
         return existing;
     }
 
@@ -48,15 +46,13 @@ ModuleID Preprocessor::load(const std::filesystem::path& path, const SourceLocat
     };
 
     if (path.extension() != OPTIC_EXTENSION) {
-        return fail("'" + path.generic_string() +
-                    "' is not a valid Optic source file; expected '.optic'.");
+        return fail("'" + path.generic_string() + "' is not a valid Optic source file; expected '.optic'.");
     }
 
     std::error_code status_error;
 
     if (!std::filesystem::is_regular_file(path, status_error)) {
-        return fail("Cannot open module '" + path.generic_string() +
-                    "': expected a regular source file.");
+        return fail("Cannot open module '" + path.generic_string() + "': expected a regular source file.");
     }
 
     std::ifstream file(path, std::ios::binary);
@@ -73,9 +69,11 @@ ModuleID Preprocessor::load(const std::filesystem::path& path, const SourceLocat
 
     auto module = std::make_unique<Module>(ModuleGraph::path_key(path));
     module->set_buffer(std::move(buffer));
+
     const auto id = graph.add_module(std::move(module));
     trace("Loaded module [" + std::to_string(id) + "]: " + graph.get_module(id)->get_path() + " (" +
           std::to_string(graph.get_module(id)->get_buffer().size()) + " bytes)");
+
     return id;
 }
 
@@ -100,6 +98,7 @@ bool Preprocessor::process(ModuleID id, std::size_t depth) {
 
     trace("Processing module [" + std::to_string(id) + "] at import depth " +
           std::to_string(depth) + ": " + module.get_path());
+
     module.set_state(ModuleState::Processing);
 
     const auto errors_before = context.diagnostics().error_count();
@@ -118,6 +117,7 @@ bool Preprocessor::process(ModuleID id, std::size_t depth) {
     trace(std::string(success ? "Processed" : "Failed") + " module [" + std::to_string(id) + "]: " +
           std::to_string(module.get_tokens().size() - 1) + " output tokens (excluding EOF), " +
           std::to_string(module.get_dependencies().size()) + " dependencies");
+
     return success;
 }
 
@@ -144,11 +144,10 @@ bool Preprocessor::tokenize_module(ModuleID id, std::vector<lexer::token_t>& inp
     return false;
 }
 
-void Preprocessor::filter_tokens(ModuleID id,
-                                 std::span<const lexer::token_t> input,
-                                 std::size_t depth) {
+void Preprocessor::filter_tokens(ModuleID id, std::span<const lexer::token_t> input, std::size_t depth) {
     auto& module = *context.modules().get_module(id);
     auto& output = module.get_tokens();
+    
     unsigned braces = 0;
     unsigned parens = 0;
     unsigned brackets = 0;

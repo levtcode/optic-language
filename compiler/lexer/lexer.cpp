@@ -387,7 +387,7 @@ void Lexer::tokenize(std::vector<token_t>& tokens) {
         }
     }
 
-    tokens.emplace_back(TokenType::EndOfFile, "EOF", location.line, location.column);
+    tokens.emplace_back(TokenType::EndOfFile, "\0", location.line, location.column);
     tokens.back().offset = tokens.back().end_offset = pos;
 }
 

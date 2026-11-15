@@ -42,6 +42,7 @@ ast::TypeRef Parser::parse_type_atom() {
 
     const auto first = cursor.advance();
     std::string name = first.value;
+
     // Retain multi-word integer types as a single syntactic name.
     if (first.type == Unsigned || first.type == Long || first.type == Short) {
         while (cursor.at(Int) || cursor.at(Long) || cursor.at(Short)) {

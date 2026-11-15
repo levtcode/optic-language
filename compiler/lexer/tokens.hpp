@@ -24,6 +24,7 @@ struct token_t {
     std::string value;
     unsigned line;
     unsigned column;
+
     // Half-open byte range in the original source, independent of decoded value.
     std::size_t offset = 0;
     std::size_t end_offset = 0;

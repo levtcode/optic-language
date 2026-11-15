@@ -91,6 +91,7 @@ bool ModuleGraph::add_dependency(ModuleID module, ModuleID dependency) {
         const auto& deps = get_module(id)->dependencies;
         pending.insert(pending.end(), deps.begin(), deps.end());
     }
+
     source->dependencies.push_back(dependency);
     ordered_modules.clear();
     return true;
@@ -155,9 +156,11 @@ void ModuleGraph::print(std::ostream& out) const {
             ++edges;
         }
     }
+
     out << "\n----- MODULE DEPENDENCIES -----\n"
         << "Modules: " << modules.size() << ", edges: " << edges << ", ready: " << ready
         << ", failed: " << failed << '\n';
+
     auto print_ids = [&](const std::vector<ModuleID>& ids) {
         out << '[';
 
@@ -190,11 +193,13 @@ void ModuleGraph::print(std::ostream& out) const {
             << "  State: " << state << "\n  Source bytes: " << module->get_buffer().size()
             << "\n  Output tokens (excluding EOF): "
             << (module->tokens.empty() ? 0 : module->tokens.size() - 1) << "\n  Dependencies: ";
+
         print_ids(module->dependencies);
         out << "\n  Imported by: ";
         print_ids(dependents[id]);
         out << '\n';
     }
+
     out << "Dependency-first order: ";
     print_ids(ordered_modules);
     out << '\n';
@@ -203,6 +208,7 @@ void ModuleGraph::print(std::ostream& out) const {
         out << "  " << i + 1 << ". [" << ordered_modules[i] << "] "
             << get_module(ordered_modules[i])->get_path() << '\n';
     }
+
     out << "Order describes accepted edges; failed modules are not compiled.\n";
     out << "\n";
 }

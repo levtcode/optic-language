@@ -47,6 +47,7 @@ void print_settings(const std::string& heading,
               << "    Name" << std::string(name_width - 4, ' ') << "  " << value_heading << "\n"
               << "    " << std::string(name_width, '-') << "  "
               << std::string(value_heading == "State" ? 8 : value_heading.size(), '-') << "\n";
+              
     for (const auto& [name, value] : settings) {
         std::cout << "    " << name << std::string(name_width - name.size(), ' ') << "  " << value
                   << "\n";
@@ -146,6 +147,7 @@ ArgValue parse_value(const std::string_view& option_name, size_t* index) {
     double floating_value{};
     const auto [float_ptr, float_ec] =
         std::from_chars(value.data(), value.data() + value.size(), floating_value);
+
     if (float_ec == std::errc{} && float_ptr == value.data() + value.size()) {
         return floating_value;
     }

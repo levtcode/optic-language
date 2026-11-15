@@ -63,18 +63,21 @@ private:
     const driver::Module& module;
     driver::DiagnosticsEngine& diagnostics;
     TokenCursor cursor;
+
     unsigned depth = 0;
     unsigned errors = 0;
     unsigned soft_lines = 0;
-    bool probing = false;
     unsigned expression_nesting = 0;
     unsigned ambiguous_casts = 0;
+
+    bool probing = false;
     std::unordered_set<std::string> type_names;
 
     // Token boundaries and error handling.
     [[noreturn]] void fail(const std::string& message);
     const lexer::token_t& expect(lexer::TokenType type, const std::string& message);
     ast::SourceSpan span(const lexer::token_t& start) const;
+
     void skip_newlines();
     void skip_separators();
     void expect_statement_end();
@@ -82,6 +85,7 @@ private:
 
     // Statements and declarations.
     bool is_declaration_ahead();
+
     ast::StmtPtr parse_statement(bool declarations = false);
     std::unique_ptr<ast::Block> parse_block();
     ast::StmtPtr parse_function(bool constructor = false);

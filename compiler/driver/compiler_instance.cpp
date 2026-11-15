@@ -121,7 +121,6 @@ void CompilerInstance::cli_tooling(int argc, char** argv) noexcept {
         }
 
         std::size_t index = std::string::npos;
-
         const int match = optic::compiler::driver::match_compiler_arg(arg, &index);
 
         // Source file.
@@ -144,7 +143,6 @@ void CompilerInstance::cli_tooling(int argc, char** argv) noexcept {
             }
 
             const std::string option_name(arg.substr(0, index));
-
             const auto it = config.options.find(option_name);
 
             if (it == config.options.end()) {
@@ -171,7 +169,6 @@ void CompilerInstance::cli_tooling(int argc, char** argv) noexcept {
 
         // Compiler flag.
         const std::string flag_name(arg.substr(0, index));
-
         const auto it = config.flags.find(flag_name);
 
         if (it == config.flags.end()) {
@@ -291,6 +288,7 @@ void CompilerInstance::stop(bool generate_core_dump) noexcept {
 bool CompilerInstance::configure_diagnostics() noexcept {
     auto& diagnostics = compiler_context.diagnostics();
     auto diagnostic_config = diagnostics.get_config();
+
     diagnostic_config.all_warnings = compiler_context.config().has_flag("-Wall");
     const auto color =
         std::get<std::string>(compiler_context.config().options.at("--color-diagnostics"));
@@ -308,7 +306,6 @@ bool CompilerInstance::configure_diagnostics() noexcept {
 
 void CompilerInstance::run_compilation_phases() noexcept {
     auto& diagnostics = compiler_context.diagnostics();
-
     preprocess();
 
     if (!diagnostics.has_errors()) {
@@ -337,7 +334,6 @@ int CompilerInstance::run(int argc, char* argv[], CompilerMode mode) noexcept {
     auto& diagnostics = compiler_context.diagnostics();
 
     set_mode(mode);
-
     cli_tooling(argc, argv);
 
     if (compiler_context.config().input_files.empty()) {

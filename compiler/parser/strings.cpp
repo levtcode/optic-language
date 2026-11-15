@@ -9,8 +9,9 @@ ast::ExprPtr Parser::parse_embedded_expression(const std::string& source,
                                                const lexer::token_t& origin) {
     driver::Module fragment(module.get_path());
     driver::DiagnosticsEngine lexical_errors;
-    fragment.set_buffer(source);
     lexer::Lexer(fragment, lexical_errors).tokenize_layout(fragment.get_tokens());
+
+    fragment.set_buffer(source);
 
     if (lexical_errors.has_errors()) {
         fail("Invalid lexical input inside formatted-string expression.");
@@ -26,6 +27,7 @@ ast::ExprPtr Parser::parse_embedded_expression(const std::string& source,
 
         token.line += origin.line - 1;
     }
+
     // Borrow the original module for nested literal spans; no copy of its source.
     Parser parser(id, module, diagnostics, fragment.get_tokens());
     parser.depth = depth;
@@ -52,8 +54,10 @@ ast::ExprPtr Parser::parse_formatted_string() {
     const auto source = module.get_buffer();
     const auto body_start = quoted.offset + 1;
     const auto body = source.substr(body_start, quoted.end_offset - body_start - 1);
+
     auto result = std::make_unique<ast::FormattedExpr>(span(start));
     auto origin = lexer::token_t(StringLiteral, "", quoted.line, quoted.column + 1);
+
     std::size_t scanned = 0;
     auto origin_at = [&](std::size_t index) {
         while (scanned < index) {
@@ -68,16 +72,19 @@ ast::ExprPtr Parser::parse_formatted_string() {
         origin.offset = origin.end_offset = body_start + index;
         return origin;
     };
+
     std::string literal;
     std::size_t literal_start = 0;
+
     auto flush = [&](std::size_t end) {
         if (literal.empty()) {
             return;
         }
         driver::Module segment(module.get_path());
         driver::DiagnosticsEngine lexical_errors;
-        segment.set_buffer("\"" + literal + "\"");
         lexer::Lexer(segment, lexical_errors).tokenize(segment.get_tokens());
+
+        segment.set_buffer("\"" + literal + "\"");
 
         if (lexical_errors.has_errors()) {
             fail("Invalid formatted-string literal segment.");
@@ -87,6 +94,7 @@ ast::ExprPtr Parser::parse_formatted_string() {
         ast::SourceSpan location{id, origin.offset, body_start + end, origin.line, origin.column};
         result->parts.push_back(std::make_unique<ast::LiteralExpr>(
             location, StringLiteral, segment.get_tokens()[0].value));
+
         literal.clear();
     };
 

@@ -120,8 +120,7 @@ ast::ExprPtr Parser::parse_expression(int minimum_precedence) {
         const auto tokens = cursor.slice(begin, cursor.position());
         const auto location = result->span;
         const auto height = result->height + 1;
-        result =
-            check_expression_height(std::make_unique<ast::UnresolvedExpr>(
+        result = check_expression_height(std::make_unique<ast::UnresolvedExpr>(
                                         location,
                                         std::move(result),
                                         std::vector<lexer::token_t>(tokens.begin(), tokens.end())),
@@ -165,8 +164,7 @@ ast::ExprPtr Parser::parse_binary_expression(int minimum_precedence) {
                 fail("Invalid assignment target.");
             }
 
-            auto assign =
-                std::make_unique<ast::AssignExpr>(location, std::move(left), std::move(right));
+            auto assign = std::make_unique<ast::AssignExpr>(location, std::move(left), std::move(right));
             assign->op = operator_token.type;
             left = check_expression_height(std::move(assign), height);
         } else {
@@ -246,20 +244,19 @@ ast::ExprPtr Parser::try_parse_cast(const lexer::token_t& start) {
             const auto next = cursor.peek().type;
             auto value = parse_unary_expression();
             const auto height = 1 + value->height;
-            auto cast = std::make_unique<ast::CastExpr>(
-                span(start), std::move(*cast_type), std::move(value));
-            cast->ambiguous =
-                !is_known_type && (next == Plus || next == Minus || next == Star || next == BitAnd);
+            auto cast = std::make_unique<ast::CastExpr>(span(start), std::move(*cast_type), std::move(value));
+
+            cast->ambiguous = !is_known_type && 
+                (next == Plus || next == Minus || next == Star || next == BitAnd);
+
             if (cast->ambiguous) {
                 ++ambiguous_casts;
             }
 
             return check_expression_height(std::move(cast), height);
         }
-
         cursor.restore(saved_position);
     }
-
     return nullptr;
 }
 
