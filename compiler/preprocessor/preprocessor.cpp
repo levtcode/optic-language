@@ -23,12 +23,14 @@ void Preprocessor::error(const Module& module, const lexer::token_t& token, cons
     trace("Failed at " + module.get_path() + ":" + std::to_string(token.line) + ":" +
           std::to_string(token.column) + ": " + message);
 
+    const SourceLocation loc{SourceKind::BufferNoAST, module.get_path(), "", token.line, token.column};
     context.diagnostics().report(
-        {SourceKind::BufferNoAST, module.get_path(), "", token.line, token.column},
+        loc,
         "Error: " + message,
         "",
         "",
-        DiagnosticsLevel::Error);
+        DiagnosticsLevel::Error,
+        SourceLocationRange::from_text(loc, token.value));
 }
 
 ModuleID Preprocessor::load(const std::filesystem::path& path, const SourceLocation& loc) {

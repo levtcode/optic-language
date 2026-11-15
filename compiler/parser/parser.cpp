@@ -20,11 +20,17 @@ Parser::Depth::Depth(Parser& parser)
     }
 
     const auto& t = cursor.peek();
-    diagnostics.report({driver::SourceKind::BufferNoAST, module.get_path(), "", t.line, t.column},
+    const driver::SourceLocation loc{driver::SourceKind::BufferNoAST, module.get_path(), "",
+                                     t.line, t.column};
+    const auto source = module.get_buffer();
+    const auto text = t.offset <= t.end_offset && t.end_offset <= source.size()
+                          ? source.substr(t.offset, t.end_offset - t.offset) : std::string_view{};
+    diagnostics.report(loc,
                        "Error: " + message,
                        "",
                        "",
-                       driver::DiagnosticsLevel::Error);
+                       driver::DiagnosticsLevel::Error,
+                       driver::SourceLocationRange::from_text(loc, text));
     if (++errors >= max_syntax_errors) {
         throw LimitError{};
     }
@@ -77,6 +83,7 @@ void Parser::recover_statement() {
 }
 
 std::unique_ptr<ast::ModuleAST> Parser::parse() {
+    diagnostics.register_source(module.get_path(), module.get_buffer());
     const auto& tokens = module.get_tokens();
 
     if (tokens.empty() || tokens.back().type != EndOfFile ||

@@ -91,8 +91,31 @@ class ParserIntegration(unittest.TestCase):
         result = self.compile(main)
         self.assertEqual(result.returncode, 1)
         self.assertIn(str(dep).encode(), result.stderr)
-        self.assertIn(b"At line: 3", result.stderr)
+        self.assertIn(f"{dep}:3:1".encode(), result.stderr)
+        self.assertIn(b"3 | }\n  | ^", result.stderr)
         self.assertNotIn(b"Function helper", result.stdout)
+
+    def test_diagnostic_rendering_and_color_modes(self):
+        source = self.source("render.optic", "function main() {\n\tint return\n}\n")
+        for mode, colored in (("auto", False), ("disable", False), ("enable", True)):
+            with self.subTest(mode=mode):
+                result = subprocess.run(
+                    [str(OPTICC), "debug", f"--color-diagnostics={mode}", str(source)],
+                    capture_output=True, timeout=10)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(b"\x1b[" in result.stderr, colored)
+                if not colored:
+                    self.assertIn(f"{source}:2:6".encode(), result.stderr)
+                    self.assertIn(b"2 |     int return\n  |         ^~~~~~", result.stderr)
+                    self.assertNotIn(b"Error: Error:", result.stderr)
+
+    def test_lexer_and_preprocessor_excerpts(self):
+        source = self.source("lex.optic", "function main() {\n\t@\n}\n")
+        result = self.compile(source)
+        self.assertIn(b"2 |     @\n  |     ^", result.stderr)
+        source = self.source("imports.optic", "function main() {\n    import missing\n}\n")
+        result = self.compile(source)
+        self.assertIn(b"2 |     import missing\n  |     ^~~~~~", result.stderr)
 
     def test_unsupported_and_multiple_errors(self):
         source = self.source("bad.optic", "int = 1\nclass {}\nint = 2\n")

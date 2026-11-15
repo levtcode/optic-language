@@ -20,6 +20,12 @@
 #include <string>
 #include <utility>
 
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
+
 namespace optic::compiler::driver {
 
 void CompilerInstance::call_usage(bool help_manual) noexcept {
@@ -298,7 +304,12 @@ bool CompilerInstance::configure_diagnostics() noexcept {
         return false;
     }
 
-    diagnostic_config.color_diagnostics = color != "disable";
+#ifdef _WIN32
+    const bool terminal = _isatty(_fileno(stderr));
+#else
+    const bool terminal = isatty(fileno(stderr));
+#endif
+    diagnostic_config.color_diagnostics = color == "enable" || (color == "auto" && terminal);
     diagnostics.set_config(diagnostic_config);
 
     return true;
