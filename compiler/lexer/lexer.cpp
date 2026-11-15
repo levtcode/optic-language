@@ -356,12 +356,4 @@ const char* to_string_token(TokenType type) {
     return "Unknown";
 }
 
-void Lexer::print_tokens(const driver::Module& source) {
-    for (const auto& token : source.get_tokens()) {
-        std::cout << "Token type: " << to_string_token(token.type) << "\n"
-                  << "Token value: '" << token.value << "'\n"
-                  << "At line: " << token.line << ", in column: " << token.column << "\n"
-                  << "In file: " << source.get_path() << "\n\n";
-    }
-}
 } // namespace optic::compiler::lexer

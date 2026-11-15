@@ -200,7 +200,7 @@ void CompilerInstance::preprocess() noexcept {
                 std::cout << "[preprocessor] Token dump skipped: preprocessing failed.\n";
                 return;
             }
-            std::cout << "\n----- PRINTING PREPROCESSED TOKENS -----\n\n";
+            std::cout << "\n----- PRINTING PREPROCESSED TOKENS -----\n";
             for (const auto id : modules.compilation_order()) {
                 const auto& module = *modules.get_module(id);
                 lexer::Lexer::print_tokens(module);

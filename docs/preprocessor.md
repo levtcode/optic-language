@@ -166,3 +166,29 @@ The graph and summary remain visible after preprocessing errors. Parser token
 output is explicitly skipped on failure, so partial streams are not presented
 as successful frontend output. Existing per-module token dumps remain available
 after success, and macros stay inactive.
+
+## Token table
+
+Debug groups preprocessed tokens by source file and prints one row per token:
+
+```text
+Tokens - .vscode/file1.optic
+
+  Line:Col  Type        Representation
+  --------  ----------  --------------
+      1:14  LeftParen   "("
+      1:15  RightParen  ")"
+      1:17  LeftBrace   "{"
+      1:18  Newline     "\n"
+       2:1  EndOfFile   —
+```
+
+Paths are relative to the compiler's working directory when possible, with an
+absolute-path fallback. Position and type columns expand to fit the module.
+Values use double quotes; quotes, backslashes and control bytes are escaped so
+multiline strings and terminal controls cannot break the table. UTF-8 text is
+preserved. Remaining ASCII controls use `\xNN` escapes.
+
+The last column is a display representation: Newline is shown as `"\n"`, EOF as
+`—`, and an empty string as `""`. Token kinds, stored values and source positions
+are unchanged. No token table is emitted in Build/Run or after preprocessing fails.

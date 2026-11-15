@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
     }
     if (mode == optic::compiler::driver::CompilerMode::Debug) {
         std::cout << "[opticc] Executable: " << argv[0] << "\n[opticc] Version: " << OPTIC_VERSION
-                  << "\n[opticc] Mode: debug\n";
+                  << "\n[opticc] Mode: debug\n\n";
     }
     optic::compiler::driver::CompilerInstance compiler;
     // run() receives compiler arguments only: neither executable name nor mode.

@@ -29,6 +29,7 @@ add_library(optic_frontend STATIC
     compiler/driver/diagnostics_engine.cpp
     compiler/driver/module.cpp
     compiler/lexer/lexer.cpp
+    compiler/lexer/token_dump.cpp
     compiler/lexer/layout.cpp
     compiler/parser/parser.cpp
     compiler/parser/types.cpp
