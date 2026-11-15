@@ -19,12 +19,17 @@ Parser::Depth::Depth(Parser& parser)
         throw ParseError{};
     }
 
-    const auto& t = cursor.peek();
-    const driver::SourceLocation loc{driver::SourceKind::BufferNoAST, module.get_path(), "",
-                                     t.line, t.column};
+    diagnose(cursor.peek(), message);
+    throw ParseError{};
+}
+
+void Parser::diagnose(const lexer::token_t& t, const std::string& message) {
+    const driver::SourceLocation loc{
+        driver::SourceKind::BufferNoAST, module.get_path(), "", t.line, t.column};
     const auto source = module.get_buffer();
     const auto text = t.offset <= t.end_offset && t.end_offset <= source.size()
-                          ? source.substr(t.offset, t.end_offset - t.offset) : std::string_view{};
+                          ? source.substr(t.offset, t.end_offset - t.offset)
+                          : std::string_view{};
     diagnostics.report(loc,
                        "Error: " + message,
                        "",
@@ -34,7 +39,6 @@ Parser::Depth::Depth(Parser& parser)
     if (++errors >= max_syntax_errors) {
         throw LimitError{};
     }
-    throw ParseError{};
 }
 
 const lexer::token_t& Parser::expect(TokenType t, const std::string& message) {
@@ -74,6 +78,10 @@ void Parser::expect_statement_end() {
 
 void Parser::recover_statement() {
     while (!cursor.at(EndOfFile) && !cursor.at(RightBrace)) {
+        // A damaged expression/block must not swallow the next declaration.
+        if (cursor.at(Function) || cursor.at(Class) || cursor.at(Struct) || cursor.at(Alias)) {
+            return;
+        }
         if (cursor.accept(Newline) || cursor.accept(Semicolon)) {
             return;
         }
@@ -143,6 +151,9 @@ std::unique_ptr<ast::Block> Parser::parse_block() {
     skip_separators();
 
     while (!cursor.at(RightBrace) && !cursor.at(EndOfFile)) {
+        if (cursor.at(Function) || cursor.at(Class) || cursor.at(Struct)) {
+            fail("Expected '}' before the next module declaration.");
+        }
         const auto before = cursor.position();
 
         try {
@@ -186,6 +197,12 @@ ast::StmtPtr Parser::parse_if_statement() {
 ast::StmtPtr Parser::parse_statement(bool declarations) {
     Depth guard(*this);
     const auto start = cursor.peek();
+
+    if (declarations && (cursor.at(LeftBrace) || cursor.at(If) || cursor.at(WhileLoop) ||
+                         cursor.at(ForLoop) || cursor.at(Try) || cursor.at(Return) ||
+                         cursor.at(Throw) || cursor.at(Break) || cursor.at(Continue))) {
+        diagnose(start, "Executable statements and blocks are not allowed at module scope.");
+    }
 
     if (cursor.at(Function)) {
         if (!declarations) {

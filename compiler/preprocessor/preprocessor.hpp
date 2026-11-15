@@ -40,7 +40,7 @@ private:
 
     driver::ModuleID load(const std::filesystem::path& path, const driver::SourceLocation& loc);
     bool process(driver::ModuleID id, std::size_t depth);
-    bool tokenize_module(driver::ModuleID id, std::vector<lexer::token_t>& input);
+    void tokenize_module(driver::ModuleID id, std::vector<lexer::token_t>& input);
     void filter_tokens(driver::ModuleID id, std::span<const lexer::token_t> input, std::size_t depth);
 
     static bool parse_import_name(std::span<const lexer::token_t> tokens,

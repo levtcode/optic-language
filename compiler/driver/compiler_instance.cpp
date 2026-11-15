@@ -240,12 +240,15 @@ void CompilerInstance::parsing() noexcept {
         for (const auto id : modules.compilation_order()) {
             const auto& module = *modules.get_module(id);
 
-            if (module.state() != ModuleState::Ready) {
+            if (!module.has_parser_input()) {
                 continue;
             }
             parser::Parser parser(id, module, compiler_context.diagnostics());
 
             if (auto tree = parser.parse()) {
+                if (module.state() != ModuleState::Ready) {
+                    continue; // Recovery produces diagnostics, never a usable AST for failed input.
+                }
                 if (compiler_context.config().mode == CompilerMode::Debug) {
                     std::cout << "\n----- AST: " << module.get_path() << " -----\n";
                     ast::dump(*tree, std::cout);
@@ -319,9 +322,7 @@ void CompilerInstance::run_compilation_phases() noexcept {
     auto& diagnostics = compiler_context.diagnostics();
     preprocess();
 
-    if (!diagnostics.has_errors()) {
-        parsing();
-    }
+    parsing(); // Recover syntax diagnostics even after lexical/import errors.
 
     if (!diagnostics.has_errors()) {
         semantic_analize();

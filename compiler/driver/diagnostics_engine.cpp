@@ -76,7 +76,7 @@ const char* severity_color(DiagnosticsLevel level) {
     if (level == DiagnosticsLevel::Hint) {
         return "\033[36m";
     }
-    return "\033[31m";
+    return "\033[1;91m";
 }
 
 std::string excerpt(std::string_view source,

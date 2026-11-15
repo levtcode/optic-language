@@ -40,7 +40,7 @@ int main() {
                   "  = help: Use a value.\n"
                   "  = note: Operands need values.\n",
           "expression rendering");
-    check(engine.render(engine.entries().back(), true).find("\033[31m") != std::string::npos,
+    check(engine.render(engine.entries().back(), true).find("\033[1;91m") != std::string::npos,
           "error color missing");
     check(text.find('\033') == std::string::npos, "plain rendering contains ANSI");
     check(engine.format_msg("Error: bad", "\tx", 10, 2) ==

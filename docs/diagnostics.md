@@ -39,8 +39,27 @@ widths for combining characters and double-width glyphs are not modeled.
 `render(diagnostic)` returns plain text for tools and tests. `show`/`show_all` use
 the diagnostic color configuration. The CLI's `auto` mode enables colors only
 when stderr is a terminal; `enable` and `disable` override this. Severity and
-markers use red for errors, yellow for warnings and cyan for hints; gutters are
+markers use bold bright red (`\033[1;91m`) for errors, yellow for warnings and cyan for hints; gutters are
 gray. ANSI color is optional and does not carry unique information.
 
 The existing `format_msg` helper remains available for callers with one source
 line and a custom marker; normal diagnostic output uses the full-source renderer.
+
+## Error recovery
+
+Lexical and import errors do not suppress parsing of modules with a complete,
+EOF-terminated token stream. Such modules are parsed only to collect diagnostics;
+failed modules do not publish an AST, and errors still prevent semantic analysis
+and later compilation phases. Unloadable modules and import-depth failures have
+no parser input and are skipped.
+
+Parser recovery stops at statement boundaries and module declarations so a broken
+expression does not consume a later function. The existing limit of 32 syntax
+errors per module still applies. Recovery is best effort: an unterminated string
+or comment can hide source text, and one malformed construct may cause subsequent
+diagnostics. There is no guarantee of one message for every intended mistake.
+
+Control-flow statements and standalone blocks must occur inside functions, not
+at module scope. Expression operands still follow the grammar: negative values
+and collection literals are permitted. Type compatibility is a later semantic
+concern, not a parser error.

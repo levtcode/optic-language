@@ -1,7 +1,7 @@
 (* Runtime syntax summary. Physical NEWLINE markers are ignored in continuation
    contexts. Semantic type/name resolution, implicit generic specialization and
    the declaration/expression ambiguities described in parser.md are separate. *)
-module       = { separator | declaration | statement }, EOF ;
+module       = { separator | declaration | expression, end }, EOF ;
 declaration  = function | record | alias | variables, end ;
 function     = "function", name, parameters, ["->", type], block ;
 parameters   = "(", [parameter, {",", parameter}, [","]], ")" ;

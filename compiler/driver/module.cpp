@@ -209,7 +209,7 @@ void ModuleGraph::print(std::ostream& out) const {
             << get_module(ordered_modules[i])->get_path() << '\n';
     }
 
-    out << "Order describes accepted edges; failed modules are not compiled.\n";
+    out << "Order describes accepted edges; failed modules are parsed only for diagnostics.\n";
     out << "\n";
 }
 } // namespace optic::compiler::driver

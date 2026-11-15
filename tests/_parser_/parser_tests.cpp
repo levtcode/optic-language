@@ -88,7 +88,7 @@ void blocks() {
     valid("function f() {\n\twhile true { if false { break } else { continue } }\n return\n}\n");
     valid("function f(name: string, n) { print(name, n); return 0 }");
     valid("function f()\r\n{\r\n // comment\r\n return 1\r\n}\r\n");
-    valid("function f() {}\n{}");
+    invalid("function f() {}\n{}");
     invalid("function f():\n    return 1\n");
     std::ostringstream output;
     ast::dump(*braces.tree, output);
@@ -115,12 +115,12 @@ void types_and_containers() {
     valid("tuple[int, string, bool] tup = (1, \"hola\", true)\nvector v = [1,2,3,]\n");
     valid("const size_t bytes = 1024\nint x = 5, y = 2\nalias [unsigned long] as size_t\n");
     valid("function main() { for (int i = 0; i < x; i++) { arr[i] = i } }\n");
-    valid("for (; ptr < &array1[-1]; ptr++) {}\nfor (;;) { break }\n");
+    valid("function f() { for (; ptr < &array1[-1]; ptr++) {}\nfor (;;) { break }\n}");
     valid("struct Tree { int id\n Tree *next }\nTree *root = new Tree()\n");
     valid("class Book { public string name\nprivate int stock\nBook(name) { self.name = name "
           "}\npublic function add(n: int) -> void { self.stock += n }\n}\n");
-    valid("try { read(system::stdin) } catch (system::stream_exception &exception) { throw "
-          "exception }\n");
+    valid("function f() { try { read(system::stdin) } catch (system::stream_exception &exception) { throw "
+          "exception } }\n");
 }
 
 void casts_and_strings() {
