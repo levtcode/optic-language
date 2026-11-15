@@ -220,7 +220,10 @@ bool Preprocessor::run(const std::vector<std::string>& input_files) {
     const auto errors_before = context.diagnostics().error_count();
     import_requests = imports_completed = lexical_tokens = 0;
 
-    std::cout << "\n---- PREPROCESSOR TRACING ----\n";
+    if (context.config().mode == CompilerMode::Debug) {
+        std::cout << "\n---- PREPROCESSOR TRACING ----\n";
+    }
+    
     trace("Starting preprocessing: " + std::to_string(input_files.size()) +
           " input files; imports and module analysis active; macros disabled.");
 
