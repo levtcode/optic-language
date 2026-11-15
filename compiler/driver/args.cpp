@@ -77,7 +77,7 @@ void print_args_flags(const std::unordered_map<std::string, bool>& flags) {
 }
 
 void print_args(const CompilerConfig& config) {
-    std::cout << "Compiler configuration\n\n";
+    std::cout << "\n----- COMPILER CONFIGURATION -----\n";
     print_args_files(config.input_files);
     print_args_options(config.options);
     print_args_flags(config.flags);

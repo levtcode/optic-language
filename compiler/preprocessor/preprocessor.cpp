@@ -262,6 +262,8 @@ bool Preprocessor::process(ModuleID id, std::size_t depth) {
 bool Preprocessor::run(const std::vector<std::string>& input_files) {
     const auto errors_before = context.diagnostics().error_count();
     import_requests = imports_completed = lexical_tokens = 0;
+
+    std::cout << "\n---- PREPROCESSOR TRACING ----\n";
     trace("Starting preprocessing: " + std::to_string(input_files.size()) +
           " input files; imports and module analysis active; macros disabled.");
     for (const auto& path : input_files) {
@@ -270,6 +272,8 @@ bool Preprocessor::run(const std::vector<std::string>& input_files) {
             process(id, 0);
         }
     }
+    std::cout << "\n";
+
     if (!context.modules().topological_sort()) {
         context.diagnostics().report(
             {}, "Error: Invalid module dependency graph.", "", "", DiagnosticsLevel::Error);
@@ -284,7 +288,8 @@ bool Preprocessor::run(const std::vector<std::string>& input_files) {
                   << "Successful imports: " << imports_completed << '\n'
                   << "Failed imports: " << import_requests - imports_completed << '\n'
                   << "Lexical tokens (excluding EOF): " << lexical_tokens << '\n'
-                  << "New errors: " << context.diagnostics().error_count() - errors_before << '\n';
+                  << "New errors: " << context.diagnostics().error_count() - errors_before << '\n'
+                  << "\n";
     }
     return success;
 }
