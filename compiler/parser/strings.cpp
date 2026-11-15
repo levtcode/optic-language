@@ -27,6 +27,7 @@ ast::ExprPtr Parser::parse_embedded_expression(const std::string& source,
     parser.depth = depth;
     parser.type_names = type_names;
     parser.soft_lines = 1;
+
     try {
         parser.skip_newlines();
         auto value = parser.parse_expression();
@@ -81,6 +82,7 @@ ast::ExprPtr Parser::parse_formatted_string() {
             location, StringLiteral, segment.get_tokens()[0].value));
         literal.clear();
     };
+
     for (std::size_t i = 0; i < body.size();) {
         if (literal.empty()) {
             literal_start = i;
@@ -136,9 +138,11 @@ ast::ExprPtr Parser::parse_formatted_string() {
     }
     flush(body.size());
     unsigned height = 1;
+
     for (const auto& part : result->parts) {
         height = std::max(height, part->height + 1);
     }
+
     return check_expression_height(std::move(result), height);
 }
 } // namespace optic::compiler::parser

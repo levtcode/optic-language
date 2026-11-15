@@ -31,11 +31,13 @@ ast::TypeRef Parser::parse_type_atom() {
     if (soft_lines) {
         skip_newlines();
     }
+
     const auto start = cursor.peek();
     const bool constant = cursor.accept(Const);
     if (!is_builtin_type(cursor.peek().type) && !cursor.at(Identifier)) {
         fail("Expected a type name.");
     }
+
     const auto first = cursor.advance();
     std::string name = first.value;
     // Retain multi-word integer types as a single syntactic name.
@@ -101,6 +103,7 @@ ast::TypeRef Parser::parse_type_atom() {
         } while (true);
         expect(RightBracket, "Expected ']' after type arguments.");
     }
+
     if (soft_lines) {
         skip_newlines();
     }
@@ -110,6 +113,7 @@ ast::TypeRef Parser::parse_type_atom() {
             skip_newlines();
         }
     }
+
     if (cursor.accept(BitAnd)) {
         result.reference = true;
     }
@@ -122,6 +126,7 @@ ast::TypeRef Parser::parse_type(bool union_allowed) {
     if (soft_lines) {
         skip_newlines();
     }
+
     if (union_allowed && cursor.at(BitOr)) {
         const auto first_span = result.span;
         ast::TypeRef union_type(first_span, "");
@@ -133,6 +138,7 @@ ast::TypeRef Parser::parse_type(bool union_allowed) {
         union_type.span.end = cursor.previous().end_offset;
         return union_type;
     }
+
     return result;
 }
 
@@ -140,13 +146,16 @@ bool Parser::is_declaration_ahead() {
     if (is_builtin_type(cursor.peek().type) || cursor.at(Const)) {
         return true;
     }
+
     if (!cursor.at(Identifier)) {
         return false;
     }
+
     const auto saved = cursor.position();
     const auto saved_probe = probing;
     probing = true;
     bool result = false;
+
     try {
         auto candidate = parse_type(false);
         if (cursor.accept(Identifier)) {

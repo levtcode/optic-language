@@ -18,6 +18,7 @@ Parser::Depth::Depth(Parser& parser)
     if (probing) {
         throw ParseError{};
     }
+
     const auto& t = cursor.peek();
     diagnostics.report({driver::SourceKind::BufferNoAST, module.get_path(), "", t.line, t.column},
                        "Error: " + message,
@@ -34,6 +35,7 @@ const lexer::token_t& Parser::expect(TokenType t, const std::string& message) {
     if (!cursor.at(t)) {
         fail(message);
     }
+
     return cursor.advance();
 }
 
@@ -59,6 +61,7 @@ void Parser::expect_statement_end() {
     if (cursor.accept(Semicolon)) {
         return;
     }
+
     if (cursor.at(Newline) || cursor.at(RightBrace) || cursor.at(EndOfFile)) {
         return;
     }
@@ -93,8 +96,10 @@ std::unique_ptr<ast::ModuleAST> Parser::parse() {
             type_names.insert(tokens[i + 1].value);
         }
     }
+
     auto result = std::make_unique<ast::ModuleAST>();
     result->module = id;
+
     try {
         skip_separators();
         while (!cursor.at(EndOfFile)) {
@@ -112,6 +117,7 @@ std::unique_ptr<ast::ModuleAST> Parser::parse() {
     } catch (const LimitError&) {
         return nullptr;
     }
+
     return errors == 0 ? std::move(result) : nullptr;
 }
 
@@ -124,6 +130,7 @@ std::unique_ptr<ast::Block> Parser::parse_block() {
         expect(LeftBrace, "Expected '{' to begin a block; ':' blocks are not supported.");
     auto result = std::make_unique<ast::Block>(span(start));
     skip_separators();
+
     while (!cursor.at(RightBrace) && !cursor.at(EndOfFile)) {
         const auto before = cursor.position();
         try {
@@ -136,6 +143,7 @@ std::unique_ptr<ast::Block> Parser::parse_block() {
         }
         skip_separators();
     }
+
     expect(RightBrace, "Expected '}' to close the block.");
     result->span = span(start);
     return result;
@@ -169,27 +177,34 @@ ast::StmtPtr Parser::parse_statement(bool declarations) {
         }
         return parse_function();
     }
+
     if (cursor.at(Class) || cursor.at(Struct)) {
         if (!declarations) {
             fail("Record declarations must be at module scope.");
         }
         return parse_record();
     }
+
     if (cursor.at(Alias)) {
         return parse_type_alias();
     }
+
     if (cursor.at(LeftBrace)) {
         return parse_block();
     }
+
     if (cursor.at(If)) {
         return parse_if_statement();
     }
+
     if (cursor.at(ForLoop)) {
         return parse_for_statement();
     }
+
     if (cursor.at(Try)) {
         return parse_try_statement();
     }
+
     if (cursor.accept(WhileLoop)) {
         auto result = std::make_unique<ast::WhileStmt>(span(start));
         result->condition = parse_expression();
@@ -197,6 +212,7 @@ ast::StmtPtr Parser::parse_statement(bool declarations) {
         result->span = span(start);
         return result;
     }
+
     if (cursor.accept(Return) || cursor.accept(Throw)) {
         ast::ExprPtr value;
         if (!cursor.at(Newline) && !cursor.at(Semicolon) && !cursor.at(RightBrace) &&
@@ -213,16 +229,19 @@ ast::StmtPtr Parser::parse_statement(bool declarations) {
         }
         return std::make_unique<ast::ReturnStmt>(location, std::move(value));
     }
+
     if (cursor.accept(Break)) {
         const auto location = span(start);
         expect_statement_end();
         return std::make_unique<ast::BreakStmt>(location);
     }
+
     if (cursor.accept(Continue)) {
         const auto location = span(start);
         expect_statement_end();
         return std::make_unique<ast::ContinueStmt>(location);
     }
+
     if (is_declaration_ahead()) {
         const bool unresolved_pointer = cursor.at(Identifier) && !type_names.contains(start.value);
         if (!unresolved_pointer) {
@@ -250,6 +269,7 @@ ast::StmtPtr Parser::parse_statement(bool declarations) {
         }
         return declaration;
     }
+
     auto value = parse_expression();
     const auto location = span(start);
     expect_statement_end();

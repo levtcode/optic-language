@@ -93,9 +93,11 @@ bool Parser::is_assignable(const ast::Expr& value) {
         dynamic_cast<const ast::IndexExpr*>(&value) || dynamic_cast<const ast::CallExpr*>(&value)) {
         return true;
     }
+
     if (const auto* unary = dynamic_cast<const ast::UnaryExpr*>(&value)) {
         return unary->op == Star;
     }
+
     return false;
 }
 
@@ -124,6 +126,7 @@ ast::ExprPtr Parser::parse_expression(int minimum_precedence) {
                                         std::vector<lexer::token_t>(tokens.begin(), tokens.end())),
                                     height);
     }
+
     return result;
 }
 
@@ -132,7 +135,9 @@ ast::ExprPtr Parser::parse_binary_expression(int minimum_precedence) {
     if (soft_lines) {
         skip_newlines();
     }
+
     auto left = parse_unary_expression();
+
     while (true) {
         if (soft_lines) {
             skip_newlines();
@@ -164,6 +169,7 @@ ast::ExprPtr Parser::parse_binary_expression(int minimum_precedence) {
                 height);
         }
     }
+
     return left;
 }
 
@@ -172,6 +178,7 @@ ast::ExprPtr Parser::parse_unary_expression() {
     if (soft_lines) {
         skip_newlines();
     }
+
     const auto start = cursor.peek();
     if (cursor.accept(Plus) || cursor.accept(Minus) || cursor.accept(Not) || cursor.accept(Not_C) ||
         cursor.accept(BitNot) || cursor.accept(BitAnd) || cursor.accept(Star) ||
@@ -185,12 +192,15 @@ ast::ExprPtr Parser::parse_unary_expression() {
         return check_expression_height(
             std::make_unique<ast::UnaryExpr>(span(start), start.type, std::move(operand)), height);
     }
+
     if (auto cast = try_parse_cast(start)) {
         return cast;
     }
+
     if (cursor.at(New)) {
         return parse_allocation(start);
     }
+
     return parse_postfix_expression(start);
 }
 
@@ -233,6 +243,7 @@ ast::ExprPtr Parser::try_parse_cast(const lexer::token_t& start) {
         }
         cursor.restore(saved_position);
     }
+
     return nullptr;
 }
 
@@ -255,6 +266,7 @@ ast::ExprPtr Parser::parse_allocation(const lexer::token_t& start) {
         expect(RightParen, "Expected ')' after construction arguments.");
     }
     unsigned height = 1;
+
     for (const auto& argument : result->arguments) {
         height = std::max(height, argument->height + 1);
     }
@@ -264,6 +276,7 @@ ast::ExprPtr Parser::parse_allocation(const lexer::token_t& start) {
 
 ast::ExprPtr Parser::parse_postfix_expression(const lexer::token_t& start) {
     auto result = parse_primary_expression();
+
     while (true) {
         if (soft_lines) {
             skip_newlines();
@@ -320,6 +333,7 @@ ast::ExprPtr Parser::parse_postfix_expression(const lexer::token_t& start) {
             break;
         }
     }
+
     return result;
 }
 
@@ -351,6 +365,7 @@ ast::ExprPtr Parser::parse_collection(TokenType close, ast::CollectionExpr::Kind
         value->span = span(start);
         return value;
     }
+
     if (comma) {
         skip_newlines();
         while (!cursor.at(close)) {
@@ -368,8 +383,10 @@ ast::ExprPtr Parser::parse_collection(TokenType close, ast::CollectionExpr::Kind
             skip_newlines();
         }
     }
+
     expect(close, "Expected the matching collection delimiter.");
     unsigned height = 1;
+
     for (const auto& element : result->elements) {
         height = std::max(height, element->height + 1);
     }
@@ -382,18 +399,23 @@ ast::ExprPtr Parser::parse_primary_expression() {
     if (cursor.accept(Identifier)) {
         return std::make_unique<ast::NameExpr>(span(start), start.value);
     }
+
     if (cursor.accept(LeftParen)) {
         return parse_collection(RightParen, ast::CollectionExpr::Kind::Tuple);
     }
+
     if (cursor.accept(LeftBracket)) {
         return parse_collection(RightBracket, ast::CollectionExpr::Kind::Vector);
     }
+
     if (cursor.accept(LeftBrace)) {
         return parse_collection(RightBrace, ast::CollectionExpr::Kind::EmptyBraces);
     }
+
     if (cursor.at(FString)) {
         return parse_formatted_string();
     }
+
     if (cursor.at(StringLiteral) || cursor.at(RawString)) {
         std::string value;
         while (true) {

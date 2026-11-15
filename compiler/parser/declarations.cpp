@@ -9,6 +9,7 @@ ast::StmtPtr Parser::parse_function(bool constructor) {
     if (!constructor) {
         cursor.advance();
     }
+
     const auto name = expect(Identifier, "Expected a function name.").value;
     auto result = std::make_unique<ast::FunctionDecl>(span(start), name);
     result->constructor = constructor;
@@ -16,6 +17,7 @@ ast::StmtPtr Parser::parse_function(bool constructor) {
     {
         SoftLines lines(*this);
         skip_newlines();
+
         if (!cursor.at(RightParen)) {
             do {
                 skip_newlines();
@@ -41,10 +43,12 @@ ast::StmtPtr Parser::parse_function(bool constructor) {
         }
         expect(RightParen, "Expected ')' after parameters.");
     }
+
     if (cursor.accept(Arrow)) {
         skip_newlines();
         result->return_type = parse_type();
     }
+
     result->body = parse_block();
     result->span = span(start);
     return result;
@@ -69,21 +73,25 @@ ast::StmtPtr Parser::parse_variable_declaration(bool end) {
     if (end) {
         expect_statement_end();
     }
+
     if (group->declarations.size() == 1) {
         auto result = std::move(group->declarations.front());
         result->span = group->span;
         return result;
     }
+
     return group;
 }
 
 ast::StmtPtr Parser::parse_for_statement() {
     const auto start = cursor.advance();
     auto result = std::make_unique<ast::ForStmt>(span(start));
+
     expect(LeftParen, "Expected '(' after 'for'.");
     {
         SoftLines lines(*this);
         skip_newlines();
+
         if (!cursor.at(Semicolon)) {
             if (is_declaration_ahead()) {
                 result->initialization = parse_variable_declaration(false);
@@ -97,12 +105,14 @@ ast::StmtPtr Parser::parse_for_statement() {
         skip_newlines();
         expect(Semicolon, "Expected ';' after the for initialization.");
         skip_newlines();
+
         if (!cursor.at(Semicolon)) {
             result->condition = parse_expression();
         }
         skip_newlines();
         expect(Semicolon, "Expected ';' after the for condition.");
         skip_newlines();
+
         if (!cursor.at(RightParen)) {
             do {
                 result->updates.push_back(parse_expression());
@@ -111,6 +121,7 @@ ast::StmtPtr Parser::parse_for_statement() {
         }
         expect(RightParen, "Expected ')' after the for update.");
     }
+
     result->body = parse_block();
     result->span = span(start);
     return result;
@@ -124,6 +135,7 @@ ast::StmtPtr Parser::parse_record() {
     skip_newlines();
     expect(LeftBrace, "Expected '{' to begin the record.");
     skip_separators();
+
     while (!cursor.at(RightBrace) && !cursor.at(EndOfFile)) {
         const auto before = cursor.position();
         try {
@@ -131,6 +143,7 @@ ast::StmtPtr Parser::parse_record() {
             if (cursor.at(Public) || cursor.at(Private) || cursor.at(Protected)) {
                 visibility = cursor.advance().value;
             }
+
             ast::StmtPtr declaration;
             if (cursor.at(Function)) {
                 declaration = parse_function();
@@ -151,6 +164,7 @@ ast::StmtPtr Parser::parse_record() {
         }
         skip_separators();
     }
+
     expect(RightBrace, "Expected '}' to close the record.");
     result->span = span(start);
     return result;
@@ -206,6 +220,7 @@ ast::StmtPtr Parser::parse_type_alias() {
             fail("Enclose a compound alias target in '[' and ']'.");
         }
     }
+
     expect(As, "Expected 'as' between the original type and its new name.");
     const auto name = expect(Identifier, "Expected a new alias name.").value;
     auto result = std::make_unique<ast::AliasDecl>(span(start), name);

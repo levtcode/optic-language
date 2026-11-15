@@ -22,12 +22,15 @@ int hex(int c) {
     if (digit(c)) {
         return c - '0';
     }
+
     if (c >= 'a' && c <= 'f') {
         return c - 'a' + 10;
     }
+
     if (c >= 'A' && c <= 'F') {
         return c - 'A' + 10;
     }
+
     return -1;
 }
 
@@ -67,6 +70,7 @@ int Lexer::get() noexcept {
     } else {
         ++location.column;
     }
+
     return c;
 }
 
@@ -77,9 +81,11 @@ void Lexer::error(const driver::SourceLocation& loc, const std::string& message)
 token_t Lexer::read_identifier() {
     const auto loc = location;
     std::string word;
+
     while (alpha(peek()) || digit(peek())) {
         word += static_cast<char>(get());
     }
+
     const auto it = keyword_table.find(word);
     return {
         it == keyword_table.end() ? TokenType::Identifier : it->second, word, loc.line, loc.column};
@@ -89,9 +95,11 @@ token_t Lexer::read_number() {
     const auto loc = location;
     std::string value;
     bool floating = false;
+
     while (digit(peek())) {
         value += static_cast<char>(get());
     }
+
     if (peek() == '.' && digit(peek(1))) {
         floating = true;
         value += static_cast<char>(get());
@@ -99,6 +107,7 @@ token_t Lexer::read_number() {
             value += static_cast<char>(get());
         }
     }
+
     if (peek() == 'e' || peek() == 'E') {
         const auto offset = (peek(1) == '+' || peek(1) == '-') ? 2u : 1u;
         if (digit(peek(offset))) {
@@ -112,6 +121,7 @@ token_t Lexer::read_number() {
             }
         }
     }
+
     return {floating ? TokenType::FloatLiteral : TokenType::IntegerLiteral,
             value,
             loc.line,
@@ -124,6 +134,7 @@ token_t Lexer::read_string(bool raw, bool formatted) {
     std::string value;
     unsigned interpolation = 0;
     int inner_quote = 0;
+
     while (peek() != EOF && (peek() != quote || interpolation != 0)) {
         if (formatted && interpolation != 0) {
             const int c = get();
@@ -242,11 +253,13 @@ token_t Lexer::read_string(bool raw, bool formatted) {
                 }
         }
     }
+
     if (peek() == quote) {
         get();
     } else {
         error(loc, "String not closed.");
     }
+
     return {quote == '\'' ? TokenType::CharLiteral : TokenType::StringLiteral,
             value,
             loc.line,
@@ -258,12 +271,14 @@ token_t Lexer::read_operator() {
     const auto remaining = module.get_buffer().substr(pos);
     std::string_view longest;
     TokenType type = TokenType::EndOfFile;
+
     for (const auto& [spelling, candidate] : operator_table) {
         if (spelling.size() > longest.size() && remaining.starts_with(spelling)) {
             longest = spelling;
             type = candidate;
         }
     }
+
     if (longest.empty()) {
         error(loc, "Unrecognized operator.");
         return {
@@ -272,6 +287,7 @@ token_t Lexer::read_operator() {
     for (std::size_t i = 0; i < longest.size(); ++i) {
         get();
     }
+
     return {type, std::string(longest), loc.line, loc.column};
 }
 
@@ -298,6 +314,7 @@ void Lexer::tokenize(std::vector<token_t>& tokens) {
     pos = 0;
     location = {driver::SourceKind::BufferNoAST, module.get_path(), "", 1, 1};
     tokens.clear();
+
     while (peek() != EOF) {
         const auto loc = location;
         const auto c = peek();
@@ -353,6 +370,7 @@ const char* to_string_token(TokenType type) {
 #include "tokens_types.def"
 #undef X
     }
+
     return "Unknown";
 }
 

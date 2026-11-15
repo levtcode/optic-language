@@ -39,6 +39,7 @@ ModuleID Preprocessor::load(const std::filesystem::path& path, const SourceLocat
               "]: " + graph.get_module(existing)->get_path());
         return existing;
     }
+
     auto fail = [&](const std::string& message) {
         trace("Load failed for " + path.generic_string() + ": " + message);
         context.diagnostics().report(loc, "Error: " + message, "", "", DiagnosticsLevel::Error);
@@ -48,19 +49,23 @@ ModuleID Preprocessor::load(const std::filesystem::path& path, const SourceLocat
         return fail("'" + path.generic_string() +
                     "' is not a valid Optic source file; expected '.optic'.");
     }
+
     std::error_code status_error;
     if (!std::filesystem::is_regular_file(path, status_error)) {
         return fail("Cannot open module '" + path.generic_string() +
                     "': expected a regular source file.");
     }
+
     std::ifstream file(path, std::ios::binary);
     if (!file) {
         return fail("Cannot open module '" + path.generic_string() + "'.");
     }
+
     std::string buffer{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
     if (file.bad()) {
         return fail("Cannot read module '" + path.generic_string() + "'.");
     }
+
     auto module = std::make_unique<Module>(ModuleGraph::path_key(path));
     module->set_buffer(std::move(buffer));
     const auto id = graph.add_module(std::move(module));
@@ -70,193 +75,138 @@ ModuleID Preprocessor::load(const std::filesystem::path& path, const SourceLocat
 }
 
 bool Preprocessor::process(ModuleID id, std::size_t depth) {
-    auto& graph = context.modules();
-    auto& module = *graph.get_module(id);
+    auto& module = *context.modules().get_module(id);
+
     if (module.state() == ModuleState::Ready) {
         trace("Already processed module [" + std::to_string(id) + "]: " + module.get_path());
         return true;
     }
+
     if (module.state() == ModuleState::Failed) {
         trace("Already failed module [" + std::to_string(id) + "]: " + module.get_path());
         return false;
     }
-    if (depth >= 256) {
+
+    if (depth >= max_import_depth) {
         error(module, {TokenType::Import, "import", 1, 1}, "Import nesting exceeds 256 modules.");
         module.set_state(ModuleState::Failed);
         return false;
     }
+
     trace("Processing module [" + std::to_string(id) + "] at import depth " +
           std::to_string(depth) + ": " + module.get_path());
     module.set_state(ModuleState::Processing);
+
     const auto errors_before = context.diagnostics().error_count();
     std::vector<lexer::token_t> input;
-    lexer::Lexer(module, context.diagnostics()).tokenize_layout(input);
-    lexical_tokens += input.size() - 1;
-    trace("Lexed module [" + std::to_string(id) + "]: " + std::to_string(input.size() - 1) +
-          " tokens (excluding EOF)");
-    auto& output = module.get_tokens();
-    output.clear();
-    if (context.diagnostics().error_count() != errors_before) {
-        output = std::move(input);
-        module.set_state(ModuleState::Failed);
-        trace("Lexing failed for module [" + std::to_string(id) + "]: " + module.get_path());
+
+    if (!tokenize_module(id, input)) {
         return false;
     }
+
     module.clear_imports();
-    unsigned braces = 0, parens = 0, brackets = 0;
+    filter_tokens(id, input, depth);
+
+    const bool success = context.diagnostics().error_count() == errors_before;
+    module.set_state(success ? ModuleState::Ready : ModuleState::Failed);
+
+    trace(std::string(success ? "Processed" : "Failed") + " module [" + std::to_string(id) + "]: " +
+          std::to_string(module.get_tokens().size() - 1) + " output tokens (excluding EOF), " +
+          std::to_string(module.get_dependencies().size()) + " dependencies");
+    return success;
+}
+
+bool Preprocessor::tokenize_module(ModuleID id, std::vector<lexer::token_t>& input) {
+    auto& module = *context.modules().get_module(id);
+    const auto errors_before = context.diagnostics().error_count();
+
+    lexer::Lexer(module, context.diagnostics()).tokenize_layout(input);
+    lexical_tokens += input.size() - 1;
+
+    trace("Lexed module [" + std::to_string(id) + "]: " + std::to_string(input.size() - 1) +
+          " tokens (excluding EOF)");
+
+    auto& output = module.get_tokens();
+    output.clear();
+
+    if (context.diagnostics().error_count() == errors_before) {
+        return true;
+    }
+
+    output = std::move(input);
+    module.set_state(ModuleState::Failed);
+    trace("Lexing failed for module [" + std::to_string(id) + "]: " + module.get_path());
+    return false;
+}
+
+void Preprocessor::filter_tokens(ModuleID id,
+                                 std::span<const lexer::token_t> input,
+                                 std::size_t depth) {
+    auto& module = *context.modules().get_module(id);
+    auto& output = module.get_tokens();
+    unsigned braces = 0;
+    unsigned parens = 0;
+    unsigned brackets = 0;
+
+    // Preserve the final EOF even when a directive fails or macro processing stops.
     for (std::size_t cursor = 0; cursor + 1 < input.size();) {
-        const auto token = input[cursor++];
+        const auto& token = input[cursor++];
+
         if (token.type == TokenType::Import) {
             const auto start = cursor;
+
             while (cursor + 1 < input.size() && input[cursor].line == token.line &&
                    input[cursor].type != TokenType::Semicolon &&
                    input[cursor].type != TokenType::Newline) {
                 ++cursor;
             }
-            const auto end = cursor;
+
+            const auto arguments = input.subspan(start, cursor - start);
+
             if (cursor + 1 < input.size() && input[cursor].type == TokenType::Semicolon) {
                 ++cursor;
             }
+
             if (braces != 0 || parens != 0 || brackets != 0) {
                 ++import_requests;
                 error(module, token, "Imports are only allowed at module scope.");
                 continue;
             }
 
-            struct Request {
-                std::string name, alias;
-                std::filesystem::path path;
-            };
-
-            std::vector<Request> requests;
-            bool valid = start != end;
-            auto i = start;
-            while (valid && i < end) {
-                Request request;
-                if (input[i].type == TokenType::StringLiteral) {
-                    request.name = input[i++].value;
-                    if (request.name.empty() || request.name.find('\0') != std::string::npos) {
-                        valid = false;
-                        break;
-                    }
-                    request.path = request.name;
-                } else {
-                    if (input[i].type != TokenType::Identifier) {
-                        valid = false;
-                        break;
-                    }
-                    request.name = input[i].value;
-                    request.path /= input[i++].value;
-                    while (i < end && input[i].type == TokenType::Point) {
-                        ++i;
-                        if (i == end || input[i].type != TokenType::Identifier) {
-                            valid = false;
-                            break;
-                        }
-                        request.name += "." + input[i].value;
-                        request.path /= input[i++].value;
-                    }
-                }
-                if (!valid) {
-                    break;
-                }
-                if (i < end && input[i].type == TokenType::As) {
-                    ++i;
-                    if (i == end || input[i].type != TokenType::Identifier) {
-                        valid = false;
-                        break;
-                    }
-                    request.alias = input[i++].value;
-                }
-                requests.push_back(std::move(request));
-                if (i == end) {
-                    break;
-                }
-                if (input[i++].type != TokenType::Comma || i == end) {
-                    valid = false;
-                    break;
-                }
-            }
-            import_requests += requests.empty() ? 1 : requests.size();
-            if (!valid || requests.empty()) {
-                error(module,
-                      token,
-                      "Expected quoted paths or dotted module names, optional 'as' names and "
-                      "comma-separated imports.");
-                continue;
-            }
-            for (auto& request : requests) {
-                auto path = request.path;
-                if (!path.has_extension()) {
-                    path += OPTIC_EXTENSION;
-                }
-                if (path.is_relative()) {
-                    path = std::filesystem::path(module.get_path()).parent_path() / path;
-                }
-                trace("Resolving import at " + module.get_path() + ":" +
-                      std::to_string(token.line) + ":" + std::to_string(token.column) + " -> " +
-                      ModuleGraph::path_key(path));
-                const auto dependency = load(
-                    path,
-                    {SourceKind::BufferNoAST, module.get_path(), "", token.line, token.column});
-                if (dependency == invalid_module_id) {
-                    continue;
-                }
-                if (!graph.add_dependency(id, dependency)) {
-                    error(module,
-                          token,
-                          "Import cycle: '" + module.get_path() + "' -> '" +
-                              graph.get_module(dependency)->get_path() + "'.");
-                    continue;
-                }
-                if (!process(dependency, depth + 1)) {
-                    error(module,
-                          token,
-                          "Imported module failed preprocessing: '" +
-                              graph.get_module(dependency)->get_path() + "'.");
-                } else {
-                    ++imports_completed;
-                    module.record_import(
-                        {dependency, request.name, request.alias, token.line, token.column});
-                    trace("Imported " + graph.get_module(dependency)->get_path() + " from " +
-                          module.get_path() + " successfully. (edge [" + std::to_string(id) +
-                          "] -> [" + std::to_string(dependency) + "])" +
-                          (request.alias.empty() ? "" : " as " + request.alias));
-                }
-            }
+            process_import_statement(id, token, arguments, depth);
             continue;
         }
+
         if (token.type == TokenType::Macro) {
             error(module, token, "Macros are currently disabled.");
             break;
         }
+
         if (token.type == TokenType::LeftBrace) {
             ++braces;
         }
         if (token.type == TokenType::RightBrace && braces != 0) {
             --braces;
         }
+
         if (token.type == TokenType::LeftParen) {
             ++parens;
         }
         if (token.type == TokenType::RightParen && parens != 0) {
             --parens;
         }
+
         if (token.type == TokenType::LeftBracket) {
             ++brackets;
         }
         if (token.type == TokenType::RightBracket && brackets != 0) {
             --brackets;
         }
+
         output.push_back(token);
     }
+
     output.push_back(input.back());
-    const bool success = context.diagnostics().error_count() == errors_before;
-    module.set_state(success ? ModuleState::Ready : ModuleState::Failed);
-    trace(std::string(success ? "Processed" : "Failed") + " module [" + std::to_string(id) +
-          "]: " + std::to_string(output.size() - 1) + " output tokens (excluding EOF), " +
-          std::to_string(module.get_dependencies().size()) + " dependencies");
-    return success;
 }
 
 bool Preprocessor::run(const std::vector<std::string>& input_files) {
@@ -266,6 +216,7 @@ bool Preprocessor::run(const std::vector<std::string>& input_files) {
     std::cout << "\n---- PREPROCESSOR TRACING ----\n";
     trace("Starting preprocessing: " + std::to_string(input_files.size()) +
           " input files; imports and module analysis active; macros disabled.");
+
     for (const auto& path : input_files) {
         const auto id = load(path, {SourceKind::Stdin, "", "", 0, 0});
         if (id != invalid_module_id) {
@@ -278,6 +229,7 @@ bool Preprocessor::run(const std::vector<std::string>& input_files) {
         context.diagnostics().report(
             {}, "Error: Invalid module dependency graph.", "", "", DiagnosticsLevel::Error);
     }
+
     const bool success = context.diagnostics().error_count() == errors_before;
     if (context.config().mode == CompilerMode::Debug) {
         std::cout << "\n----- PREPROCESSOR SUMMARY -----\n"
@@ -291,6 +243,7 @@ bool Preprocessor::run(const std::vector<std::string>& input_files) {
                   << "New errors: " << context.diagnostics().error_count() - errors_before << '\n'
                   << "\n";
     }
+
     return success;
 }
 } // namespace optic::compiler::preprocessor
