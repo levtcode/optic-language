@@ -23,6 +23,7 @@ std::string option_value(const ArgValue& value) {
     std::visit(
         [&out](const auto& item) {
             using T = std::decay_t<decltype(item)>;
+
             if constexpr (std::is_same_v<T, bool>) {
                 out << (item ? "true" : "false");
             } else {
@@ -37,6 +38,7 @@ void print_settings(const std::string& heading,
                     const std::string& value_heading,
                     const std::map<std::string, std::string>& settings) {
     auto name_width = minimum_name_width;
+
     for (const auto& [name, value] : settings) {
         name_width = std::max(name_width, name.size());
     }
@@ -54,6 +56,7 @@ void print_settings(const std::string& heading,
 
 void print_args_files(const std::vector<std::string>& files) {
     std::cout << "  Input files\n";
+
     for (const auto& file : files) {
         std::cout << "    " << file << "\n";
     }
@@ -61,6 +64,7 @@ void print_args_files(const std::vector<std::string>& files) {
 
 void print_args_options(const std::unordered_map<std::string, ArgValue>& options) {
     std::map<std::string, std::string> rows;
+
     for (const auto& [name, value] : options) {
         rows.emplace(name, option_value(value));
     }
@@ -69,6 +73,7 @@ void print_args_options(const std::unordered_map<std::string, ArgValue>& options
 
 void print_args_flags(const std::unordered_map<std::string, bool>& flags) {
     std::map<std::string, std::string> rows;
+
     for (const auto& [name, enabled] : flags) {
         rows.emplace(name, enabled ? "enabled" : "disabled");
     }
@@ -89,11 +94,13 @@ int match_compiler_arg(const std::string_view& arg, size_t* index) {
     }
 
     size_t i = 0;
+
     while (i < arg.size() && arg[i] != '=') {
         i++;
     }
 
     *index = i;
+
     if (i++ != arg.size()) {
         return 1;
     } else {
@@ -111,6 +118,7 @@ ArgValue parse_value(const std::string_view& option_name, size_t* index) {
         *index = std::string::npos;
         return std::string{};
     }
+
     std::string_view value = option_name.substr(*index + 1);
 
     if (value.empty()) {
@@ -141,6 +149,7 @@ ArgValue parse_value(const std::string_view& option_name, size_t* index) {
     if (float_ec == std::errc{} && float_ptr == value.data() + value.size()) {
         return floating_value;
     }
+
     return std::string{value};
 }
 

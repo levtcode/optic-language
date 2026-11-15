@@ -38,7 +38,7 @@ void CompilerInstance::call_usage(bool help_manual) noexcept {
     /// if help_manual is enabled, opticc will show extended info. Not implemented yet
 }
 
-// %==========% Compiler Interface %==========%
+// Compiler configuration access.
 
 void CompilerInstance::set_mode(const CompilerMode mode) {
     compiler_context.config().mode = mode;
@@ -85,19 +85,19 @@ std::optional<ArgValue> CompilerInstance::get_option_value(const std::string& op
     return *value;
 }
 
-// %==========% Compiler Phases %==========%
+// Frontend phases and command-line handling.
 
-/* */
 void CompilerInstance::cli_tooling(int argc, char** argv) noexcept {
     auto& config = compiler_context.config();
     auto& diagnostics = compiler_context.diagnostics();
 
-    const SourceLocation srcloc(SourceKind::Stdin, "", "", 0, 0);
+    const SourceLocation argument_location(SourceKind::Stdin, "", "", 0, 0);
 
     std::string unknown_type;
     std::string unknown_name;
 
     bool files_only = false;
+
     for (int i = 0; i < argc; ++i) {
         const std::string_view arg(argv[i]);
 
@@ -105,15 +105,21 @@ void CompilerInstance::cli_tooling(int argc, char** argv) noexcept {
             files_only = true;
             continue;
         }
+
         if (arg.empty()) {
-            diagnostics.report(
-                srcloc, "Error: Empty compiler argument.\n", "", "", DiagnosticsLevel::Error);
+            diagnostics.report(argument_location,
+                               "Error: Empty compiler argument.\n",
+                               "",
+                               "",
+                               DiagnosticsLevel::Error);
             continue;
         }
+
         if (files_only) {
             add_file(std::string(arg));
             continue;
         }
+
         std::size_t index = std::string::npos;
 
         const int match = optic::compiler::driver::match_compiler_arg(arg, &index);
@@ -129,7 +135,7 @@ void CompilerInstance::cli_tooling(int argc, char** argv) noexcept {
             const ArgValue value = optic::compiler::driver::parse_value(arg, &index);
 
             if (index == std::string::npos) {
-                diagnostics.report(srcloc,
+                diagnostics.report(argument_location,
                                    "Error: Could not parse compiler option value.\n",
                                    "",
                                    "Supported value types: int, double, bool and string.\n",
@@ -149,7 +155,7 @@ void CompilerInstance::cli_tooling(int argc, char** argv) noexcept {
 
             if (!optic::compiler::driver::same_arg_type(it->second, value)) {
                 diagnostics.report(
-                    srcloc,
+                    argument_location,
                     std::format("Error: Type mismatch for option '{}'.\n", option_name),
                     "",
                     "The provided value does not match the "
@@ -178,7 +184,7 @@ void CompilerInstance::cli_tooling(int argc, char** argv) noexcept {
     }
 
     if (!unknown_type.empty()) {
-        diagnostics.report(srcloc,
+        diagnostics.report(argument_location,
                            std::format("Error: Unknown {} '{}'.\n", unknown_type, unknown_name),
                            "",
                            "",
@@ -190,17 +196,22 @@ void CompilerInstance::cli_tooling(int argc, char** argv) noexcept {
 
 void CompilerInstance::preprocess() noexcept {
     auto& config = compiler_context.config();
+
     try {
         preprocessor::Preprocessor preprocessor(compiler_context);
         const bool success = preprocessor.run(config.input_files);
+
         if (config.mode == CompilerMode::Debug) {
             auto& modules = compiler_context.modules();
             modules.print(std::cout);
+
             if (!success) {
                 std::cout << "[preprocessor] Token dump skipped: preprocessing failed.\n";
                 return;
             }
+
             std::cout << "\n----- PRINTING PREPROCESSED TOKENS -----\n";
+
             for (const auto id : modules.compilation_order()) {
                 const auto& module = *modules.get_module(id);
                 lexer::Lexer::print_tokens(module);
@@ -216,23 +227,27 @@ void CompilerInstance::preprocess() noexcept {
     }
 }
 
-/* */
 void CompilerInstance::parsing() noexcept {
     auto& trees = compiler_context.syntax_trees();
     trees.clear();
+
     try {
         auto& modules = compiler_context.modules();
+
         for (const auto id : modules.compilation_order()) {
             const auto& module = *modules.get_module(id);
+
             if (module.state() != ModuleState::Ready) {
                 continue;
             }
             parser::Parser parser(id, module, compiler_context.diagnostics());
+
             if (auto tree = parser.parse()) {
                 if (compiler_context.config().mode == CompilerMode::Debug) {
                     std::cout << "\n----- AST: " << module.get_path() << " -----\n";
                     ast::dump(*tree, std::cout);
                 }
+
                 trees.emplace(id, std::move(tree));
             }
         }
@@ -246,30 +261,26 @@ void CompilerInstance::parsing() noexcept {
     }
 }
 
-/* */
 void CompilerInstance::semantic_analize() noexcept {
     // TODO
 }
 
-/* */
 void CompilerInstance::optimize() noexcept {
     // TODO
 }
 
-/* */
 void CompilerInstance::linking() noexcept {
     // TODO
 }
 
-/* */
 void CompilerInstance::code_generation() noexcept {
     // TODO
 }
 
-/* */
 [[noreturn]]
 void CompilerInstance::stop(bool generate_core_dump) noexcept {
     compiler_context.diagnostics().show_all();
+
     if (generate_core_dump) {
         abort();
     } else {
@@ -277,7 +288,50 @@ void CompilerInstance::stop(bool generate_core_dump) noexcept {
     }
 }
 
-/* */
+bool CompilerInstance::configure_diagnostics() noexcept {
+    auto& diagnostics = compiler_context.diagnostics();
+    auto diagnostic_config = diagnostics.get_config();
+    diagnostic_config.all_warnings = compiler_context.config().has_flag("-Wall");
+    const auto color =
+        std::get<std::string>(compiler_context.config().options.at("--color-diagnostics"));
+
+    if (color != "auto" && color != "enable" && color != "disable") {
+        std::fprintf(stderr, "opticc: --color-diagnostics expects auto, enable or disable.\n");
+        return false;
+    }
+
+    diagnostic_config.color_diagnostics = color != "disable";
+    diagnostics.set_config(diagnostic_config);
+
+    return true;
+}
+
+void CompilerInstance::run_compilation_phases() noexcept {
+    auto& diagnostics = compiler_context.diagnostics();
+
+    preprocess();
+
+    if (!diagnostics.has_errors()) {
+        parsing();
+    }
+
+    if (!diagnostics.has_errors()) {
+        semantic_analize();
+    }
+
+    if (!diagnostics.has_errors()) {
+        optimize();
+    }
+
+    if (!diagnostics.has_errors()) {
+        code_generation();
+    }
+
+    if (!diagnostics.has_errors()) {
+        linking();
+    }
+}
+
 [[nodiscard]]
 int CompilerInstance::run(int argc, char* argv[], CompilerMode mode) noexcept {
     auto& diagnostics = compiler_context.diagnostics();
@@ -285,43 +339,26 @@ int CompilerInstance::run(int argc, char* argv[], CompilerMode mode) noexcept {
     set_mode(mode);
 
     cli_tooling(argc, argv);
+
     if (compiler_context.config().input_files.empty()) {
         diagnostics.report(
             SourceLocation{}, "Error: No input files.\n", "", "", DiagnosticsLevel::Error);
     }
+
     if (diagnostics.has_errors()) {
         diagnostics.show_all();
         return EXIT_FAILURE;
     }
-    auto diagnostic_config = diagnostics.get_config();
-    diagnostic_config.all_warnings = compiler_context.config().has_flag("-Wall");
-    const auto color =
-        std::get<std::string>(compiler_context.config().options.at("--color-diagnostics"));
-    if (color != "auto" && color != "enable" && color != "disable") {
-        std::fprintf(stderr, "opticc: --color-diagnostics expects auto, enable or disable.\n");
+
+    if (!configure_diagnostics()) {
         return EXIT_FAILURE;
     }
-    diagnostic_config.color_diagnostics = color != "disable";
-    diagnostics.set_config(diagnostic_config);
+
     if (mode == CompilerMode::Debug) {
         optic::compiler::driver::print_args(compiler_context.config());
     }
-    preprocess();
-    if (!diagnostics.has_errors()) {
-        parsing();
-    }
-    if (!diagnostics.has_errors()) {
-        semantic_analize();
-    }
-    if (!diagnostics.has_errors()) {
-        optimize();
-    }
-    if (!diagnostics.has_errors()) {
-        code_generation();
-    }
-    if (!diagnostics.has_errors()) {
-        linking();
-    }
+
+    run_compilation_phases();
 
     if (diagnostics.get_config().guide_engine) {
         diagnostics.run_guide_engine();
@@ -332,6 +369,7 @@ int CompilerInstance::run(int argc, char* argv[], CompilerMode mode) noexcept {
     if (diagnostics.has_errors()) {
         return EXIT_FAILURE;
     }
+
     if (mode != CompilerMode::Debug) {
         std::fprintf(stderr,
                      "opticc: %s is not implemented; frontend analysis completed, but no artifact "
@@ -340,6 +378,7 @@ int CompilerInstance::run(int argc, char* argv[], CompilerMode mode) noexcept {
                                                : "native code generation");
         return EXIT_FAILURE;
     }
+
     return EXIT_SUCCESS;
 }
 

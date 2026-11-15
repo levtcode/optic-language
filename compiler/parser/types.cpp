@@ -28,12 +28,14 @@ bool Parser::is_builtin_type(TokenType t) {
 
 ast::TypeRef Parser::parse_type_atom() {
     Depth guard(*this);
+
     if (soft_lines) {
         skip_newlines();
     }
 
     const auto start = cursor.peek();
     const bool constant = cursor.accept(Const);
+
     if (!is_builtin_type(cursor.peek().type) && !cursor.at(Identifier)) {
         fail("Expected a type name.");
     }
@@ -46,14 +48,17 @@ ast::TypeRef Parser::parse_type_atom() {
             name += " " + cursor.advance().value;
         }
     }
+
     while (cursor.accept(Scope)) {
         name += "::" + expect(Identifier, "Expected a qualified type name.").value;
     }
     ast::TypeRef result(span(start), name);
     result.constant = constant;
+
     if (cursor.accept(LeftBracket)) {
         SoftLines lines(*this);
         skip_newlines();
+
         if (cursor.at(RightBracket)) {
             fail("Expected at least one type argument.");
         }
@@ -72,15 +77,18 @@ ast::TypeRef Parser::parse_type_atom() {
                 const auto saved_probe = probing;
                 probing = true;
                 std::optional<ast::TypeRef> candidate;
+
                 try {
                     auto argument = parse_type();
                     skip_newlines();
+
                     if (cursor.at(Comma) || cursor.at(RightBracket)) {
                         candidate = std::move(argument);
                     }
                 } catch (const ParseError&) {
                 }
                 probing = saved_probe;
+
                 if (candidate) {
                     result.arguments.push_back(std::move(*candidate));
                 } else {
@@ -93,10 +101,12 @@ ast::TypeRef Parser::parse_type_atom() {
                 }
             }
             skip_newlines();
+
             if (!cursor.accept(Comma)) {
                 break;
             }
             skip_newlines();
+
             if (cursor.at(RightBracket)) {
                 break;
             }
@@ -107,8 +117,10 @@ ast::TypeRef Parser::parse_type_atom() {
     if (soft_lines) {
         skip_newlines();
     }
+
     while (cursor.accept(Star)) {
         ++result.pointers;
+
         if (soft_lines) {
             skip_newlines();
         }
@@ -117,12 +129,14 @@ ast::TypeRef Parser::parse_type_atom() {
     if (cursor.accept(BitAnd)) {
         result.reference = true;
     }
+
     result.span = span(start);
     return result;
 }
 
 ast::TypeRef Parser::parse_type(bool union_allowed) {
     auto result = parse_type_atom();
+
     if (soft_lines) {
         skip_newlines();
     }
@@ -131,10 +145,12 @@ ast::TypeRef Parser::parse_type(bool union_allowed) {
         const auto first_span = result.span;
         ast::TypeRef union_type(first_span, "");
         union_type.alternatives.push_back(std::move(result));
+
         while (cursor.accept(BitOr)) {
             skip_newlines();
             union_type.alternatives.push_back(parse_type_atom());
         }
+
         union_type.span.end = cursor.previous().end_offset;
         return union_type;
     }
@@ -158,6 +174,7 @@ bool Parser::is_declaration_ahead() {
 
     try {
         auto candidate = parse_type(false);
+
         if (cursor.accept(Identifier)) {
             const auto next = cursor.peek().type;
             result = next == Equal || next == Comma || next == Semicolon || next == Newline ||
@@ -165,6 +182,7 @@ bool Parser::is_declaration_ahead() {
         }
     } catch (const ParseError&) {
     }
+
     cursor.restore(saved);
     probing = saved_probe;
     return result;

@@ -15,7 +15,6 @@
 
 namespace optic::compiler::driver {
 
-/* */
 enum class DiagnosticsLevel {
     Hint,
     Warning,
@@ -24,14 +23,12 @@ enum class DiagnosticsLevel {
     InternalError,
 };
 
-/* */
 enum class SourceKind {
     Stdin,
     BufferAST,
     BufferNoAST,
 };
 
-/* */
 struct SourceLocation {
     SourceKind source_kind = SourceKind::BufferNoAST;
     std::string file;
@@ -53,12 +50,10 @@ struct SourceLocation {
           column(col) {}
 };
 
-/* */
 class SourceLocationRange {
     // TODO
 };
 
-/* */
 struct DiagnosticsConfig {
     bool color_diagnostics = true;
     bool guide_engine = false;
@@ -66,7 +61,6 @@ struct DiagnosticsConfig {
     // more ...
 };
 
-/* */
 struct Diagnostic {
     SourceLocation loc;
     std::string msg;
@@ -88,7 +82,6 @@ struct Diagnostic {
     [[nodiscard]] static const char* severity_to_string(const DiagnosticsLevel);
 };
 
-/* */
 class DiagnosticsEngine {
 private:
     unsigned warnings_num = 0;

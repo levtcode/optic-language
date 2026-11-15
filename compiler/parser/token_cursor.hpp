@@ -20,9 +20,11 @@ public:
 
     const lexer::token_t& advance() {
         const auto& token = peek();
+
         if (token.type != lexer::TokenType::EndOfFile) {
             ++index;
         }
+
         return token;
     }
 

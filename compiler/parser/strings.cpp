@@ -11,15 +11,19 @@ ast::ExprPtr Parser::parse_embedded_expression(const std::string& source,
     driver::DiagnosticsEngine lexical_errors;
     fragment.set_buffer(source);
     lexer::Lexer(fragment, lexical_errors).tokenize_layout(fragment.get_tokens());
+
     if (lexical_errors.has_errors()) {
         fail("Invalid lexical input inside formatted-string expression.");
     }
+
     for (auto& token : fragment.get_tokens()) {
         token.offset += origin.offset;
         token.end_offset += origin.offset;
+
         if (token.line == 1) {
             token.column += origin.column - 1;
         }
+
         token.line += origin.line - 1;
     }
     // Borrow the original module for nested literal spans; no copy of its source.
@@ -60,6 +64,7 @@ ast::ExprPtr Parser::parse_formatted_string() {
                 ++origin.column;
             }
         }
+
         origin.offset = origin.end_offset = body_start + index;
         return origin;
     };
@@ -73,9 +78,11 @@ ast::ExprPtr Parser::parse_formatted_string() {
         driver::DiagnosticsEngine lexical_errors;
         segment.set_buffer("\"" + literal + "\"");
         lexer::Lexer(segment, lexical_errors).tokenize(segment.get_tokens());
+
         if (lexical_errors.has_errors()) {
             fail("Invalid formatted-string literal segment.");
         }
+
         const auto origin = origin_at(literal_start);
         ast::SourceSpan location{id, origin.offset, body_start + end, origin.line, origin.column};
         result->parts.push_back(std::make_unique<ast::LiteralExpr>(
@@ -87,19 +94,23 @@ ast::ExprPtr Parser::parse_formatted_string() {
         if (literal.empty()) {
             literal_start = i;
         }
+
         if (body[i] == '\\' && i + 1 < body.size()) {
             literal += body[i++];
             literal += body[i++];
             continue;
         }
+
         if ((body[i] == '{' || body[i] == '}') && i + 1 < body.size() && body[i + 1] == body[i]) {
             literal += body[i];
             i += 2;
             continue;
         }
+
         if (body[i] == '}') {
             fail("Unmatched '}' in formatted string.");
         }
+
         if (body[i] != '{') {
             literal += body[i++];
             continue;
@@ -108,13 +119,16 @@ ast::ExprPtr Parser::parse_formatted_string() {
         const auto begin = ++i;
         unsigned braces = 1;
         char quote = 0;
+
         while (i < body.size() && braces != 0) {
             const auto c = body[i];
+
             if (quote != 0) {
                 if (c == '\\' && i + 1 < body.size()) {
                     i += 2;
                     continue;
                 }
+
                 if (c == quote) {
                     quote = 0;
                 }
@@ -125,10 +139,12 @@ ast::ExprPtr Parser::parse_formatted_string() {
             } else if (c == '}') {
                 --braces;
             }
+
             if (braces != 0) {
                 ++i;
             }
         }
+
         if (braces != 0) {
             fail("Unclosed formatted-string expression.");
         }

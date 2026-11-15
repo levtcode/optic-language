@@ -13,6 +13,7 @@ namespace {
 std::string escape_text(std::string_view value) {
     constexpr std::string_view hex_digits = "0123456789abcdef";
     std::string escaped;
+
     for (const unsigned char character : value) {
         switch (character) {
             case '\\':
@@ -52,6 +53,7 @@ std::string escape_text(std::string_view value) {
                 }
         }
     }
+
     return escaped;
 }
 
@@ -59,12 +61,15 @@ std::string display_path(const driver::Module& source) {
     const std::filesystem::path path(source.get_path());
     std::error_code error;
     const auto working_directory = std::filesystem::current_path(error);
+
     if (!error && path.is_absolute()) {
         const auto relative = path.lexically_relative(working_directory);
+
         if (!relative.empty()) {
             return escape_text(relative.generic_string());
         }
     }
+
     return escape_text(path.generic_string());
 }
 
@@ -76,9 +81,11 @@ std::string representation(const token_t& token) {
     if (token.type == TokenType::EndOfFile) {
         return "—";
     }
+
     if (token.type == TokenType::Newline) {
         return "\"\\n\"";
     }
+
     return "\"" + escape_text(token.value) + "\"";
 }
 } // namespace
@@ -92,6 +99,7 @@ void Lexer::print_tokens(const driver::Module& source, std::ostream& out) {
     constexpr std::string_view type_header = "Type";
     std::size_t position_width = position_header.size();
     std::size_t type_width = type_header.size();
+
     for (const auto& token : source.get_tokens()) {
         position_width = std::max(position_width, position(token).size());
         type_width = std::max(type_width, std::string_view(to_string_token(token.type)).size());

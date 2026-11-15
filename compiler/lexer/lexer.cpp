@@ -60,10 +60,12 @@ int Lexer::peek(std::size_t offset) const noexcept {
 
 int Lexer::get() noexcept {
     const int c = peek();
+
     if (c == EOF) {
         return c;
     }
     ++pos;
+
     if (c == '\n') {
         ++location.line;
         location.column = 1;
@@ -103,6 +105,7 @@ token_t Lexer::read_number() {
     if (peek() == '.' && digit(peek(1))) {
         floating = true;
         value += static_cast<char>(get());
+
         while (digit(peek())) {
             value += static_cast<char>(get());
         }
@@ -110,12 +113,15 @@ token_t Lexer::read_number() {
 
     if (peek() == 'e' || peek() == 'E') {
         const auto offset = (peek(1) == '+' || peek(1) == '-') ? 2u : 1u;
+
         if (digit(peek(offset))) {
             floating = true;
             value += static_cast<char>(get());
+
             if (peek() == '+' || peek() == '-') {
                 value += static_cast<char>(get());
             }
+
             while (digit(peek())) {
                 value += static_cast<char>(get());
             }
@@ -139,6 +145,7 @@ token_t Lexer::read_string(bool raw, bool formatted) {
         if (formatted && interpolation != 0) {
             const int c = get();
             value += static_cast<char>(c);
+
             if (inner_quote != 0) {
                 if (c == '\\' && peek() != EOF) {
                     value += static_cast<char>(get());
@@ -154,8 +161,10 @@ token_t Lexer::read_string(bool raw, bool formatted) {
             }
             continue;
         }
+
         if (formatted && peek() == '{') {
             value += static_cast<char>(get());
+
             if (peek() == '{') {
                 value += static_cast<char>(get());
             } else {
@@ -163,6 +172,7 @@ token_t Lexer::read_string(bool raw, bool formatted) {
             }
             continue;
         }
+
         if (!raw && (peek() == '\n' || peek() == '\r')) {
             error(loc, "String not closed before end of line.");
             return {quote == '\'' ? TokenType::CharLiteral : TokenType::StringLiteral,
@@ -171,11 +181,14 @@ token_t Lexer::read_string(bool raw, bool formatted) {
                     loc.column};
         }
         int c = get();
+
         if (c != '\\' || raw) {
             value += static_cast<char>(c);
             continue;
         }
+
         const auto escape_loc = location;
+
         if (peek() == '\n' || peek() == '\r') {
             if (get() == '\r' && peek() == '\n') {
                 get();
@@ -183,9 +196,11 @@ token_t Lexer::read_string(bool raw, bool formatted) {
             continue; // C/C++ backslash-newline splicing, indentation remains content.
         }
         c = get();
+
         if (c == EOF) {
             break;
         }
+
         switch (c) {
             case 'a':
                 value += '\a';
@@ -222,10 +237,12 @@ token_t Lexer::read_string(bool raw, bool formatted) {
             case 'U': {
                 const unsigned width = c == 'x' ? 2 : c == 'u' ? 4 : 8;
                 unsigned code = 0, count = 0;
+
                 while (count < width && hex(peek()) >= 0) {
                     code = code * 16 + hex(get());
                     ++count;
                 }
+
                 if ((c == 'x' && count == 0) || (c != 'x' && count != width)) {
                     error(escape_loc, "Invalid hexadecimal or Unicode escape.");
                 } else if (c == 'x') {
@@ -240,9 +257,11 @@ token_t Lexer::read_string(bool raw, bool formatted) {
             default:
                 if (c >= '0' && c <= '7') {
                     unsigned code = c - '0';
+
                     for (int n = 1; n < 3 && peek() >= '0' && peek() <= '7'; ++n) {
                         code = code * 8 + get() - '0';
                     }
+
                     if (code > 255) {
                         error(escape_loc, "Octal escape exceeds one byte.");
                     } else {
@@ -284,6 +303,7 @@ token_t Lexer::read_operator() {
         return {
             TokenType::EndOfFile, std::string(1, static_cast<char>(get())), loc.line, loc.column};
     }
+
     for (std::size_t i = 0; i < longest.size(); ++i) {
         get();
     }
@@ -295,12 +315,15 @@ void Lexer::ignore_comment() {
     const auto loc = location;
     get();
     const int kind = get();
+
     if (kind == '/') {
         while (peek() != EOF && peek() != '\n') {
             get();
         }
+
         return;
     }
+
     while (peek() != EOF) {
         if (get() == '*' && peek() == '/') {
             get();
@@ -318,16 +341,20 @@ void Lexer::tokenize(std::vector<token_t>& tokens) {
     while (peek() != EOF) {
         const auto loc = location;
         const auto c = peek();
+
         if (std::isspace(c)) {
             get();
             continue;
         }
+
         if (c == '/' && (peek(1) == '/' || peek(1) == '*')) {
             ignore_comment();
             continue;
         }
+
         const auto start = pos;
         const auto count = tokens.size();
+
         if ((c == 'r' || c == 'f') && peek(1) == '"') {
             get();
             tokens.emplace_back(c == 'r' ? TokenType::RawString : TokenType::FString,
@@ -353,11 +380,13 @@ void Lexer::tokenize(std::vector<token_t>& tokens) {
             error(loc, "Unexpected character in source.");
             get();
         }
+
         for (auto i = count; i < tokens.size(); ++i) {
             tokens[i].offset = start + (i > count ? 1 : 0);
             tokens[i].end_offset = tokens.size() - count == 2 && i == count ? start + 1 : pos;
         }
     }
+
     tokens.emplace_back(TokenType::EndOfFile, "EOF", location.line, location.column);
     tokens.back().offset = tokens.back().end_offset = pos;
 }

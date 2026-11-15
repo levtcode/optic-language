@@ -31,7 +31,6 @@ enum class CompilerMode {
     Debug  // Inspect configuration and preprocessed tokens; no debugger
 };
 
-/* */
 struct TargetMachineInfo {
     // TODO
 };
@@ -130,9 +129,11 @@ private:
     std::map<ModuleID, std::unique_ptr<ast::ModuleAST>> module_asts;
 };
 
-/* */
 class CompilerInstance {
 private:
+    bool configure_diagnostics() noexcept;
+    void run_compilation_phases() noexcept;
+
     void cli_tooling(int argc, char** argv) noexcept;
     void preprocess() noexcept;
     void parsing() noexcept;

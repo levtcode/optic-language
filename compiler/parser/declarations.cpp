@@ -6,6 +6,7 @@ using enum TokenType;
 
 ast::StmtPtr Parser::parse_function(bool constructor) {
     const auto start = cursor.peek();
+
     if (!constructor) {
         cursor.advance();
     }
@@ -26,16 +27,19 @@ ast::StmtPtr Parser::parse_function(bool constructor) {
                     expect(Identifier, "Expected a parameter name; use name: Type for annotations.")
                         .value;
                 std::optional<ast::TypeRef> annotation;
+
                 if (cursor.accept(Colon)) {
                     skip_newlines();
                     annotation = parse_type();
                 }
                 result->parameters.push_back({span(first), parameter_name, std::move(annotation)});
                 skip_newlines();
+
                 if (!cursor.accept(Comma)) {
                     break;
                 }
                 skip_newlines();
+
                 if (cursor.at(RightParen)) {
                     break;
                 }
@@ -62,6 +66,7 @@ ast::StmtPtr Parser::parse_variable_declaration(bool end) {
         const auto declaration_start = cursor.peek();
         const auto name = expect(Identifier, "Expected a variable name after its type.").value;
         ast::ExprPtr value;
+
         if (cursor.accept(Equal)) {
             skip_newlines();
             value = parse_expression();
@@ -70,6 +75,7 @@ ast::StmtPtr Parser::parse_variable_declaration(bool end) {
             span(declaration_start), declared_type, name, std::move(value)));
     } while (cursor.accept(Comma));
     group->span = span(start);
+
     if (end) {
         expect_statement_end();
     }
@@ -138,13 +144,16 @@ ast::StmtPtr Parser::parse_record() {
 
     while (!cursor.at(RightBrace) && !cursor.at(EndOfFile)) {
         const auto before = cursor.position();
+
         try {
             std::string visibility;
+
             if (cursor.at(Public) || cursor.at(Private) || cursor.at(Protected)) {
                 visibility = cursor.advance().value;
             }
 
             ast::StmtPtr declaration;
+
             if (cursor.at(Function)) {
                 declaration = parse_function();
             } else if (cursor.at(Identifier) && cursor.peek().value == name &&
@@ -159,6 +168,7 @@ ast::StmtPtr Parser::parse_record() {
         } catch (const ParseError&) {
             recover_statement();
         }
+
         if (cursor.position() == before) {
             cursor.advance();
         }
@@ -175,9 +185,11 @@ ast::StmtPtr Parser::parse_try_statement() {
     auto result = std::make_unique<ast::TryStmt>(span(start));
     result->body = parse_block();
     skip_newlines();
+
     if (!cursor.at(Catch)) {
         fail("Expected at least one 'catch' after 'try'.");
     }
+
     while (cursor.at(Catch)) {
         const auto handler_start = cursor.advance();
         expect(LeftParen, "Expected '(' after 'catch'.");
@@ -191,6 +203,7 @@ ast::StmtPtr Parser::parse_try_statement() {
             skip_newlines();
             expect(RightParen, "Expected ')' after the exception binding.");
         }
+
         auto body = parse_block();
         result->handlers.push_back(
             {span(handler_start), std::move(*exception_type), name, std::move(body)});
@@ -204,6 +217,7 @@ ast::StmtPtr Parser::parse_type_alias() {
     const auto start = cursor.advance();
     const bool grouped = cursor.accept(LeftBracket);
     std::optional<ast::TypeRef> target;
+
     if (grouped) {
         SoftLines lines(*this);
         skip_newlines();
@@ -215,6 +229,7 @@ ast::StmtPtr Parser::parse_type_alias() {
             fail("Expected a type name or a bracketed type expression after 'alias'.");
         }
         target = parse_type(false);
+
         if (!target->arguments.empty() || target->pointers || target->reference ||
             target->constant) {
             fail("Enclose a compound alias target in '[' and ']'.");

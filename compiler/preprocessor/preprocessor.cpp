@@ -34,6 +34,7 @@ void Preprocessor::error(const Module& module,
 
 ModuleID Preprocessor::load(const std::filesystem::path& path, const SourceLocation& loc) {
     auto& graph = context.modules();
+
     if (const auto existing = graph.find_module(path); existing != invalid_module_id) {
         trace("Reusing module [" + std::to_string(existing) +
               "]: " + graph.get_module(existing)->get_path());
@@ -45,23 +46,27 @@ ModuleID Preprocessor::load(const std::filesystem::path& path, const SourceLocat
         context.diagnostics().report(loc, "Error: " + message, "", "", DiagnosticsLevel::Error);
         return invalid_module_id;
     };
+
     if (path.extension() != OPTIC_EXTENSION) {
         return fail("'" + path.generic_string() +
                     "' is not a valid Optic source file; expected '.optic'.");
     }
 
     std::error_code status_error;
+
     if (!std::filesystem::is_regular_file(path, status_error)) {
         return fail("Cannot open module '" + path.generic_string() +
                     "': expected a regular source file.");
     }
 
     std::ifstream file(path, std::ios::binary);
+
     if (!file) {
         return fail("Cannot open module '" + path.generic_string() + "'.");
     }
 
     std::string buffer{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+
     if (file.bad()) {
         return fail("Cannot read module '" + path.generic_string() + "'.");
     }
@@ -185,6 +190,7 @@ void Preprocessor::filter_tokens(ModuleID id,
         if (token.type == TokenType::LeftBrace) {
             ++braces;
         }
+
         if (token.type == TokenType::RightBrace && braces != 0) {
             --braces;
         }
@@ -192,6 +198,7 @@ void Preprocessor::filter_tokens(ModuleID id,
         if (token.type == TokenType::LeftParen) {
             ++parens;
         }
+
         if (token.type == TokenType::RightParen && parens != 0) {
             --parens;
         }
@@ -199,6 +206,7 @@ void Preprocessor::filter_tokens(ModuleID id,
         if (token.type == TokenType::LeftBracket) {
             ++brackets;
         }
+
         if (token.type == TokenType::RightBracket && brackets != 0) {
             --brackets;
         }
@@ -219,10 +227,12 @@ bool Preprocessor::run(const std::vector<std::string>& input_files) {
 
     for (const auto& path : input_files) {
         const auto id = load(path, {SourceKind::Stdin, "", "", 0, 0});
+
         if (id != invalid_module_id) {
             process(id, 0);
         }
     }
+
     std::cout << "\n";
 
     if (!context.modules().topological_sort()) {
@@ -231,6 +241,7 @@ bool Preprocessor::run(const std::vector<std::string>& input_files) {
     }
 
     const bool success = context.diagnostics().error_count() == errors_before;
+
     if (context.config().mode == CompilerMode::Debug) {
         std::cout << "\n----- PREPROCESSOR SUMMARY -----\n"
                   << "Result: " << (success ? "success" : "failed") << '\n'

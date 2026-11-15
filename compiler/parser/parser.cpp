@@ -73,12 +73,14 @@ void Parser::recover_statement() {
         if (cursor.accept(Newline) || cursor.accept(Semicolon)) {
             return;
         }
+
         cursor.advance();
     }
 }
 
 std::unique_ptr<ast::ModuleAST> Parser::parse() {
     const auto& tokens = module.get_tokens();
+
     if (tokens.empty() || tokens.back().type != EndOfFile ||
         std::count_if(
             tokens.begin(), tokens.end(), [](const auto& t) { return t.type == EndOfFile; }) != 1) {
@@ -102,13 +104,16 @@ std::unique_ptr<ast::ModuleAST> Parser::parse() {
 
     try {
         skip_separators();
+
         while (!cursor.at(EndOfFile)) {
             const auto before = cursor.position();
+
             try {
                 result->statements.push_back(parse_statement(true));
             } catch (const ParseError&) {
                 recover_statement();
             }
+
             if (cursor.position() == before) {
                 cursor.advance();
             }
@@ -133,11 +138,13 @@ std::unique_ptr<ast::Block> Parser::parse_block() {
 
     while (!cursor.at(RightBrace) && !cursor.at(EndOfFile)) {
         const auto before = cursor.position();
+
         try {
             result->statements.push_back(parse_statement());
         } catch (const ParseError&) {
             recover_statement();
         }
+
         if (cursor.position() == before) {
             cursor.advance();
         }
@@ -156,8 +163,10 @@ ast::StmtPtr Parser::parse_if_statement() {
     result->condition = parse_expression();
     result->then_branch = parse_block();
     skip_newlines();
+
     if (cursor.accept(Else)) {
         skip_newlines();
+
         if (cursor.at(If)) {
             result->else_branch = parse_if_statement();
         } else {
@@ -171,10 +180,12 @@ ast::StmtPtr Parser::parse_if_statement() {
 ast::StmtPtr Parser::parse_statement(bool declarations) {
     Depth guard(*this);
     const auto start = cursor.peek();
+
     if (cursor.at(Function)) {
         if (!declarations) {
             fail("Nested function declarations are not supported yet.");
         }
+
         return parse_function();
     }
 
@@ -182,6 +193,7 @@ ast::StmtPtr Parser::parse_statement(bool declarations) {
         if (!declarations) {
             fail("Record declarations must be at module scope.");
         }
+
         return parse_record();
     }
 
@@ -215,18 +227,23 @@ ast::StmtPtr Parser::parse_statement(bool declarations) {
 
     if (cursor.accept(Return) || cursor.accept(Throw)) {
         ast::ExprPtr value;
+
         if (!cursor.at(Newline) && !cursor.at(Semicolon) && !cursor.at(RightBrace) &&
             !cursor.at(EndOfFile)) {
             value = parse_expression();
         }
+
         if (start.type == Throw && !value) {
             fail("Expected an exception expression after 'throw'.");
         }
+
         const auto location = span(start);
         expect_statement_end();
+
         if (start.type == Throw) {
             return std::make_unique<ast::ThrowStmt>(location, std::move(value));
         }
+
         return std::make_unique<ast::ReturnStmt>(location, std::move(value));
     }
 
@@ -244,9 +261,11 @@ ast::StmtPtr Parser::parse_statement(bool declarations) {
 
     if (is_declaration_ahead()) {
         const bool unresolved_pointer = cursor.at(Identifier) && !type_names.contains(start.value);
+
         if (!unresolved_pointer) {
             return parse_variable_declaration();
         }
+
         const auto begin = cursor.position();
         auto declaration = parse_variable_declaration();
         const auto end = cursor.position();
@@ -254,6 +273,7 @@ ast::StmtPtr Parser::parse_statement(bool declarations) {
         const auto saved_probe = probing;
         probing = true;
         ast::ExprPtr alternative;
+
         try {
             alternative = parse_expression();
             expect_statement_end();
@@ -263,10 +283,12 @@ ast::StmtPtr Parser::parse_statement(bool declarations) {
         probing = saved_probe;
         const bool same_end = cursor.position() == end;
         cursor.restore(end);
+
         if (alternative && same_end) {
             return std::make_unique<ast::AmbiguousStmt>(
                 span(start), std::move(declaration), std::move(alternative));
         }
+
         return declaration;
     }
 

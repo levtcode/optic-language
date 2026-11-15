@@ -115,6 +115,7 @@ ast::ExprPtr Parser::parse_expression(int minimum_precedence) {
     } restore{expression_nesting};
 
     auto result = parse_binary_expression(minimum_precedence);
+
     if (outermost && ambiguous_casts != previous_ambiguity_count) {
         const auto tokens = cursor.slice(begin, cursor.position());
         const auto location = result->span;
@@ -132,6 +133,7 @@ ast::ExprPtr Parser::parse_expression(int minimum_precedence) {
 
 ast::ExprPtr Parser::parse_binary_expression(int minimum_precedence) {
     Depth guard(*this);
+
     if (soft_lines) {
         skip_newlines();
     }
@@ -142,10 +144,13 @@ ast::ExprPtr Parser::parse_binary_expression(int minimum_precedence) {
         if (soft_lines) {
             skip_newlines();
         }
+
         const auto operator_precedence = get_operator_precedence(cursor.peek().type);
+
         if (operator_precedence < minimum_precedence) {
             break;
         }
+
         const auto operator_token = cursor.advance();
         skip_newlines();
         auto right =
@@ -154,10 +159,12 @@ ast::ExprPtr Parser::parse_binary_expression(int minimum_precedence) {
         auto location = left->span;
         location.end = right->span.end;
         const auto height = 1 + std::max(left->height, right->height);
+
         if (is_assignment_operator(operator_token.type)) {
             if (!is_assignable(*left)) {
                 fail("Invalid assignment target.");
             }
+
             auto assign =
                 std::make_unique<ast::AssignExpr>(location, std::move(left), std::move(right));
             assign->op = operator_token.type;
@@ -175,19 +182,23 @@ ast::ExprPtr Parser::parse_binary_expression(int minimum_precedence) {
 
 ast::ExprPtr Parser::parse_unary_expression() {
     Depth guard(*this);
+
     if (soft_lines) {
         skip_newlines();
     }
 
     const auto start = cursor.peek();
+
     if (cursor.accept(Plus) || cursor.accept(Minus) || cursor.accept(Not) || cursor.accept(Not_C) ||
         cursor.accept(BitNot) || cursor.accept(BitAnd) || cursor.accept(Star) ||
         cursor.accept(Increment) || cursor.accept(Decrement) || cursor.accept(Delete)) {
         skip_newlines();
         auto operand = parse_unary_expression();
+
         if ((start.type == Increment || start.type == Decrement) && !is_assignable(*operand)) {
             fail("Invalid increment/decrement target.");
         }
+
         const auto height = 1 + operand->height;
         return check_expression_height(
             std::make_unique<ast::UnaryExpr>(span(start), start.type, std::move(operand)), height);
@@ -213,6 +224,7 @@ ast::ExprPtr Parser::try_parse_cast(const lexer::token_t& start) {
         probing = true;
         std::optional<ast::TypeRef> cast_type;
         bool is_known_type = false;
+
         try {
             cursor.advance();
             SoftLines lines(*this);
@@ -221,6 +233,7 @@ ast::ExprPtr Parser::try_parse_cast(const lexer::token_t& start) {
                             type_names.contains(cursor.peek().value);
             auto candidate = parse_type();
             skip_newlines();
+
             if (cursor.accept(RightParen) && can_start_operand(cursor.peek().type)) {
                 cast_type = std::move(candidate);
             }
@@ -228,6 +241,7 @@ ast::ExprPtr Parser::try_parse_cast(const lexer::token_t& start) {
             // A failed lookahead is expected; normal parsing reports real errors.
         }
         probing = was_probing;
+
         if (cast_type) {
             const auto next = cursor.peek().type;
             auto value = parse_unary_expression();
@@ -239,8 +253,10 @@ ast::ExprPtr Parser::try_parse_cast(const lexer::token_t& start) {
             if (cast->ambiguous) {
                 ++ambiguous_casts;
             }
+
             return check_expression_height(std::move(cast), height);
         }
+
         cursor.restore(saved_position);
     }
 
@@ -255,9 +271,11 @@ ast::ExprPtr Parser::parse_allocation(const lexer::token_t& start) {
     {
         SoftLines lines(*this);
         skip_newlines();
+
         while (!cursor.at(RightParen)) {
             result->arguments.push_back(parse_expression());
             skip_newlines();
+
             if (!cursor.accept(Comma)) {
                 break;
             }
@@ -281,6 +299,7 @@ ast::ExprPtr Parser::parse_postfix_expression(const lexer::token_t& start) {
         if (soft_lines) {
             skip_newlines();
         }
+
         if (cursor.at(Point) || cursor.at(Scope)) {
             const bool qualified = cursor.advance().type == Scope;
             skip_newlines();
@@ -294,9 +313,11 @@ ast::ExprPtr Parser::parse_postfix_expression(const lexer::token_t& start) {
             {
                 SoftLines lines(*this);
                 skip_newlines();
+
                 while (!cursor.at(RightParen)) {
                     call->arguments.push_back(parse_expression());
                     skip_newlines();
+
                     if (!cursor.accept(Comma)) {
                         break;
                     }
@@ -304,7 +325,9 @@ ast::ExprPtr Parser::parse_postfix_expression(const lexer::token_t& start) {
                 }
                 expect(RightParen, "Expected ')' after call arguments.");
             }
+
             auto height = call->callee->height + 1;
+
             for (const auto& argument : call->arguments) {
                 height = std::max(height, argument->height + 1);
             }
@@ -322,9 +345,11 @@ ast::ExprPtr Parser::parse_postfix_expression(const lexer::token_t& start) {
                 height);
         } else if (cursor.at(Increment) || cursor.at(Decrement)) {
             const auto operator_token = cursor.advance().type;
+
             if (!is_assignable(*result)) {
                 fail("Invalid increment/decrement target.");
             }
+
             const auto height = result->height + 1;
             result = check_expression_height(
                 std::make_unique<ast::PostfixExpr>(span(start), operator_token, std::move(result)),
@@ -343,6 +368,7 @@ ast::ExprPtr Parser::parse_collection(TokenType close, ast::CollectionExpr::Kind
     auto result = std::make_unique<ast::CollectionExpr>(span(start), kind);
     SoftLines lines(*this);
     skip_newlines();
+
     if (cursor.accept(close)) {
         result->span = span(start);
         return result;
@@ -350,6 +376,7 @@ ast::ExprPtr Parser::parse_collection(TokenType close, ast::CollectionExpr::Kind
     result->elements.push_back(parse_expression());
     skip_newlines();
     const bool dictionary = close == RightBrace && cursor.accept(Colon);
+
     if (dictionary) {
         result->kind = ast::CollectionExpr::Kind::Dictionary;
         skip_newlines();
@@ -359,6 +386,7 @@ ast::ExprPtr Parser::parse_collection(TokenType close, ast::CollectionExpr::Kind
     }
     skip_newlines();
     const bool comma = cursor.accept(Comma);
+
     if (close == RightParen && !comma) {
         expect(RightParen, "Expected ')' after the expression.");
         auto value = std::move(result->elements.front());
@@ -368,15 +396,18 @@ ast::ExprPtr Parser::parse_collection(TokenType close, ast::CollectionExpr::Kind
 
     if (comma) {
         skip_newlines();
+
         while (!cursor.at(close)) {
             result->elements.push_back(parse_expression());
             skip_newlines();
+
             if (dictionary) {
                 expect(Colon, "Expected ':' between dictionary key and value.");
                 skip_newlines();
                 result->elements.push_back(parse_expression());
             }
             skip_newlines();
+
             if (!cursor.accept(Comma)) {
                 break;
             }
@@ -396,6 +427,7 @@ ast::ExprPtr Parser::parse_collection(TokenType close, ast::CollectionExpr::Kind
 
 ast::ExprPtr Parser::parse_primary_expression() {
     const auto start = cursor.peek();
+
     if (cursor.accept(Identifier)) {
         return std::make_unique<ast::NameExpr>(span(start), start.value);
     }
@@ -418,19 +450,23 @@ ast::ExprPtr Parser::parse_primary_expression() {
 
     if (cursor.at(StringLiteral) || cursor.at(RawString)) {
         std::string value;
+
         while (true) {
             if (cursor.accept(RawString)) {
             }
             value += expect(StringLiteral, "Expected a string literal.").value;
             const auto saved_position = cursor.position();
             skip_newlines();
+
             if (!cursor.at(StringLiteral) && !cursor.at(RawString)) {
                 cursor.restore(saved_position);
                 break;
             }
         }
+
         return std::make_unique<ast::LiteralExpr>(span(start), StringLiteral, value);
     }
+
     switch (start.type) {
         case IntegerLiteral:
         case FloatLiteral:
