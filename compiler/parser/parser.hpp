@@ -74,6 +74,7 @@ private:
     std::unordered_set<std::string> type_names;
 
     // Token boundaries and error handling.
+    void diagnose(const lexer::token_t&, const std::string& message);
     [[noreturn]] void fail(const std::string& message);
     const lexer::token_t& expect(lexer::TokenType type, const std::string& message);
     ast::SourceSpan span(const lexer::token_t& start) const;

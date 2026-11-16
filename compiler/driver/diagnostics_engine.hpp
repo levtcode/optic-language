@@ -5,12 +5,12 @@
  * C++ declarations and definitions belong to namespace optic::compiler::driver.
  */
 
-// MORE LATER: Create DiagnosticRange or similar, to measure the distance between 2 SourceLocation
-// instances MORE LATER: Fix the format_msg() logic. Make that print renders '^~~~~'
-
 #pragma once
 
+#include <optional>
 #include <string>
+#include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace optic::compiler::driver {
@@ -50,12 +50,16 @@ struct SourceLocation {
           column(col) {}
 };
 
-class SourceLocationRange {
-    // TODO
+/// One-based byte positions; end is exclusive and must belong to the same source.
+struct SourceLocationRange {
+    SourceLocation begin;
+    SourceLocation end;
+
+    static SourceLocationRange from_text(const SourceLocation& begin, std::string_view text);
 };
 
 struct DiagnosticsConfig {
-    bool color_diagnostics = true;
+    bool color_diagnostics = false;
     bool guide_engine = false;
     bool all_warnings = false;
     // more ...
@@ -67,6 +71,7 @@ struct Diagnostic {
     std::string solution;
     std::string more_info;
     DiagnosticsLevel level;
+    std::optional<SourceLocationRange> range;
 
     Diagnostic(const SourceLocation& location,
                const std::string& message,
@@ -90,6 +95,7 @@ private:
 
     DiagnosticsConfig config;
     std::vector<Diagnostic> diagnostics;
+    std::unordered_map<std::string, std::string> sources;
 
     void print_info(const Diagnostic&, const SourceKind&) noexcept;
     void show_guide_engine_menu() noexcept;
@@ -99,7 +105,13 @@ public:
                 const std::string& msg,
                 const std::string& sol,
                 const std::string& info,
-                const DiagnosticsLevel);
+                const DiagnosticsLevel,
+                std::optional<SourceLocationRange> range = std::nullopt);
+
+    /// Own a source snapshot so diagnostics remain renderable after its module is destroyed.
+    void register_source(const std::string& file, std::string_view source);
+    /// Deterministic plain text by default; terminal output uses DiagnosticsConfig.
+    std::string render(const Diagnostic&, bool color = false) const;
     void show() noexcept;
     void show_all() noexcept;
     void run_guide_engine() noexcept;
@@ -132,7 +144,7 @@ public:
                            const std::string& buffer_view,
                            const unsigned ln,
                            const unsigned col,
-                           const std::string& pointer) noexcept;
+                           const std::string& pointer = "^") const;
 };
 
 } // namespace optic::compiler::driver

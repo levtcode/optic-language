@@ -73,6 +73,15 @@ public:
         buffer = std::move(value);
     }
 
+    // A failed module can still have a complete, recoverable parser stream.
+    bool has_parser_input() const noexcept {
+        return parser_input_ready;
+    }
+
+    void mark_parser_input_ready() noexcept {
+        parser_input_ready = true;
+    }
+
     ModuleState state() const noexcept {
         return processing_state;
     }
@@ -89,6 +98,7 @@ private:
     std::vector<ModuleID> dependencies;
     std::vector<ImportBinding> imports;
     ModuleState processing_state = ModuleState::Loaded;
+    bool parser_input_ready = false;
 };
 
 /// Stable module IDs and canonical paths; insertion order breaks ties deterministically.

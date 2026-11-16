@@ -18,5 +18,7 @@ struct Tree {
     Tree *next
 }
 Tree *root = new Tree()
-if (not root) { print("error") }
-delete root
+function main() {
+    if (not root) { print("error") }
+    delete root
+}

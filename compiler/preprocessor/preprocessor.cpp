@@ -23,12 +23,14 @@ void Preprocessor::error(const Module& module, const lexer::token_t& token, cons
     trace("Failed at " + module.get_path() + ":" + std::to_string(token.line) + ":" +
           std::to_string(token.column) + ": " + message);
 
+    const SourceLocation loc{SourceKind::BufferNoAST, module.get_path(), "", token.line, token.column};
     context.diagnostics().report(
-        {SourceKind::BufferNoAST, module.get_path(), "", token.line, token.column},
+        loc,
         "Error: " + message,
         "",
         "",
-        DiagnosticsLevel::Error);
+        DiagnosticsLevel::Error,
+        SourceLocationRange::from_text(loc, token.value));
 }
 
 ModuleID Preprocessor::load(const std::filesystem::path& path, const SourceLocation& loc) {
@@ -104,12 +106,11 @@ bool Preprocessor::process(ModuleID id, std::size_t depth) {
     const auto errors_before = context.diagnostics().error_count();
     std::vector<lexer::token_t> input;
 
-    if (!tokenize_module(id, input)) {
-        return false;
-    }
+    tokenize_module(id, input);
 
     module.clear_imports();
     filter_tokens(id, input, depth);
+    module.mark_parser_input_ready();
 
     const bool success = context.diagnostics().error_count() == errors_before;
     module.set_state(success ? ModuleState::Ready : ModuleState::Failed);
@@ -121,7 +122,7 @@ bool Preprocessor::process(ModuleID id, std::size_t depth) {
     return success;
 }
 
-bool Preprocessor::tokenize_module(ModuleID id, std::vector<lexer::token_t>& input) {
+void Preprocessor::tokenize_module(ModuleID id, std::vector<lexer::token_t>& input) {
     auto& module = *context.modules().get_module(id);
     const auto errors_before = context.diagnostics().error_count();
 
@@ -134,14 +135,10 @@ bool Preprocessor::tokenize_module(ModuleID id, std::vector<lexer::token_t>& inp
     auto& output = module.get_tokens();
     output.clear();
 
-    if (context.diagnostics().error_count() == errors_before) {
-        return true;
+    if (context.diagnostics().error_count() != errors_before) {
+        trace("Lexing reported errors for module [" + std::to_string(id) +
+              "]; retaining recoverable tokens for parsing.");
     }
-
-    output = std::move(input);
-    module.set_state(ModuleState::Failed);
-    trace("Lexing failed for module [" + std::to_string(id) + "]: " + module.get_path());
-    return false;
 }
 
 void Preprocessor::filter_tokens(ModuleID id, std::span<const lexer::token_t> input, std::size_t depth) {

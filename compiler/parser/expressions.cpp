@@ -412,7 +412,8 @@ ast::ExprPtr Parser::parse_collection(TokenType close, ast::CollectionExpr::Kind
         }
     }
 
-    expect(close, "Expected the matching collection delimiter.");
+    const auto delimiter = close == RightBrace ? "}" : close == RightBracket ? "]" : ")";
+    expect(close, std::string("Expected '") + delimiter + "' to close the collection.");
     unsigned height = 1;
 
     for (const auto& element : result->elements) {

@@ -77,7 +77,8 @@ int Lexer::get() noexcept {
 }
 
 void Lexer::error(const driver::SourceLocation& loc, const std::string& message) {
-    diagnostic_engine.report(loc, "Error: " + message, "", "", driver::DiagnosticsLevel::Error);
+    diagnostic_engine.report(loc, "Error: " + message, "", "", driver::DiagnosticsLevel::Error,
+                             driver::SourceLocationRange{loc, location});
 }
 
 token_t Lexer::read_identifier() {
@@ -334,6 +335,7 @@ void Lexer::ignore_comment() {
 }
 
 void Lexer::tokenize(std::vector<token_t>& tokens) {
+    diagnostic_engine.register_source(module.get_path(), module.get_buffer());
     pos = 0;
     location = {driver::SourceKind::BufferNoAST, module.get_path(), "", 1, 1};
     tokens.clear();

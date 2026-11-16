@@ -91,8 +91,74 @@ class ParserIntegration(unittest.TestCase):
         result = self.compile(main)
         self.assertEqual(result.returncode, 1)
         self.assertIn(str(dep).encode(), result.stderr)
-        self.assertIn(b"At line: 3", result.stderr)
+        self.assertIn(f"{dep}:3:1".encode(), result.stderr)
+        self.assertIn(b"3 | }\n  | ^", result.stderr)
         self.assertNotIn(b"Function helper", result.stdout)
+
+    def test_diagnostic_rendering_and_color_modes(self):
+        source = self.source("render.optic", "function main() {\n\tint return\n}\n")
+        for mode, colored in (("auto", False), ("disable", False), ("enable", True)):
+            with self.subTest(mode=mode):
+                result = subprocess.run(
+                    [str(OPTICC), "debug", f"--color-diagnostics={mode}", str(source)],
+                    capture_output=True, timeout=10)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(b"\x1b[" in result.stderr, colored)
+                if not colored:
+                    self.assertIn(f"{source}:2:6".encode(), result.stderr)
+                    self.assertIn(b"2 |     int return\n  |         ^~~~~~", result.stderr)
+                    self.assertNotIn(b"Error: Error:", result.stderr)
+
+    def test_lexer_and_preprocessor_excerpts(self):
+        source = self.source("lex.optic", "function main() {\n\t@\n}\n")
+        result = self.compile(source)
+        self.assertIn(b"2 |     @\n  |     ^", result.stderr)
+        source = self.source("imports.optic", "function main() {\n    import missing\n}\n")
+        result = self.compile(source)
+        self.assertIn(b"2 |     import missing\n  |     ^~~~~~", result.stderr)
+
+    def test_lexical_error_does_not_hide_later_syntax_errors(self):
+        for condition in ("1 < { 2:", "1 < - 2:"):
+            with self.subTest(condition=condition):
+                source = self.source("recovery.optic", f'while {condition}\n'
+                    '    print("file1)\n\nfunction main() {\n'
+                    '    arr = {1, 2, 3]\n    return 0\n}\n')
+                result = self.compile(source)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(b"String not closed", result.stderr)
+                self.assertIn(b"not allowed at module scope", result.stderr)
+                self.assertIn(b"Expected '}' to close the collection", result.stderr)
+                self.assertIn(f"{source}:5:19".encode(), result.stderr)
+                self.assertNotIn(b"ModuleAST", result.stdout)
+                if condition == "1 < - 2:":
+                    self.assertIn(b"':' blocks are not supported", result.stderr)
+
+    def test_global_blocks_are_rejected_and_local_blocks_are_valid(self):
+        for statement in ("while true {}", "if true {}", "for (;;) {}", "{}"):
+            with self.subTest(statement=statement):
+                source = self.source("scope.optic", statement)
+                result = self.compile(source)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(b"not allowed at module scope", result.stderr)
+                source.write_text(f"function main() {{ {statement} }}")
+                result = self.compile(source)
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_failed_dependency_does_not_hide_other_modules_errors(self):
+        self.source("dep.optic", 'string s = "unclosed\n')
+        main = self.source("main.optic", 'import dep\nfunction main() { int return }\n')
+        result = self.compile(main)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(b"String not closed", result.stderr)
+        self.assertIn(b"Expected a variable name", result.stderr)
+        self.assertIn(f"{main}:2:23".encode(), result.stderr)
+        self.assertNotIn(b"ModuleAST", result.stdout)
+
+    def test_negative_operand_and_collection_operand_remain_valid(self):
+        source = self.source("operands.optic", "function main() {\n"
+            "    while 1 < - 2 {}\n    x = 1 < {2: 3}\n}\n")
+        result = self.compile(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_unsupported_and_multiple_errors(self):
         source = self.source("bad.optic", "int = 1\nclass {}\nint = 2\n")

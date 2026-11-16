@@ -51,6 +51,11 @@ install(TARGETS optic opticc RUNTIME DESTINATION bin)
 # Optional Python integration checks exercise real process/argument boundaries.
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(optic_diagnostics_tests tests/diagnostics.cpp)
+    target_link_libraries(optic_diagnostics_tests PRIVATE optic_frontend)
+    optic_configure_target(optic_diagnostics_tests)
+    add_test(NAME diagnostics COMMAND optic_diagnostics_tests)
+    set_tests_properties(diagnostics PROPERTIES TIMEOUT 30)
     add_executable(optic_frontend_tests tests/frontend.cpp)
     target_link_libraries(optic_frontend_tests PRIVATE optic_frontend)
     # Macro implementation and historical tests are retained, but intentionally
