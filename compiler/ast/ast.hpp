@@ -2,6 +2,7 @@
  * @brief Compiler-owned syntax trees. No dependency on parser implementation state.
  */
 #pragma once
+
 #include "compiler/driver/module.hpp"
 #include <memory>
 #include <optional>

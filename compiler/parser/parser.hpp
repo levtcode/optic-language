@@ -1,5 +1,6 @@
 /** One immutable module stream in; a compiler-owned syntax tree out. */
 #pragma once
+
 #include "compiler/ast/ast.hpp"
 #include "compiler/parser/token_cursor.hpp"
 #include <unordered_set>

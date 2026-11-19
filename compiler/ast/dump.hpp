@@ -1,4 +1,5 @@
 #pragma once
+
 #include "compiler/ast/ast.hpp"
 #include <iosfwd>
 
