@@ -49,6 +49,9 @@
 # Visual Studio & VS Code task files
 /.vscode/
 
+# Editor configuration files
+.clang-format
+.editorconfig
+
 # Optic files
 *.optic
-!tests/_parser_/fixtures/**/*.optic
